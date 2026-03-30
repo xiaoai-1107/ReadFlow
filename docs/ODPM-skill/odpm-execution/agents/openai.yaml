@@ -1,0 +1,4 @@
+interface:
+  display_name: "ODPM Execution"
+  short_description: "Execute approved ODPM M-phase tasks"
+  default_prompt: "Use $odpm-execution to execute this approved ODPM task with strict validation and write-back rules."

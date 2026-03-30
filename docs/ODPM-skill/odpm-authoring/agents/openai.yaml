@@ -1,0 +1,4 @@
+interface:
+  display_name: "ODPM Authoring"
+  short_description: "Write ODPM Orient, Design, and Plan docs"
+  default_prompt: "Use $odpm-authoring to draft or review ODPM Orient, Design, or Plan documentation for this project."
