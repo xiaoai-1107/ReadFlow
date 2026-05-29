@@ -54,14 +54,7 @@ export async function clickAndWait(page: Page, locator: Locator) {
 }
 
 export async function clickByBoxCenter(page: Page, locator: Locator) {
-  const box = await locator.boundingBox()
-  if (!box) {
-    throw new Error('Target locator has no bounding box.')
-  }
-
-  const x = box.x + Math.min(Math.max(box.width * 0.35, 12), box.width - 4)
-  const y = box.y + Math.min(Math.max(box.height * 0.5, 8), box.height - 4)
-  await page.mouse.click(x, y)
+  await locator.click()
   await page.waitForTimeout(120)
 }
 
@@ -71,9 +64,7 @@ export async function clickByBoxCenterInSteps(page: Page, locator: Locator) {
     throw new Error('Target locator has no bounding box.')
   }
 
-  const x = box.x + Math.min(Math.max(box.width * 0.35, 12), box.width - 4)
-  const y = box.y + Math.min(Math.max(box.height * 0.5, 8), box.height - 4)
-  await page.mouse.move(x, y)
+  await locator.hover()
   await page.mouse.down()
   await page.waitForTimeout(80)
   await page.mouse.up()

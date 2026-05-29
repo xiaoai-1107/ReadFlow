@@ -6,7 +6,9 @@ import type {
   ReaderSession,
   SentenceTranslationRecord,
   TranslationRecord,
-  UiSettings
+  UiSettings,
+  VocabBundle,
+  WordLookupRecord
 } from '../../domain/types'
 
 const DB_NAME = 'readflow'
@@ -20,7 +22,9 @@ export const stores = {
   sentenceTranslations: localforage.createInstance({ name: DB_NAME, storeName: 'sentence-translations' }),
   annotations: localforage.createInstance({ name: DB_NAME, storeName: 'annotations' }),
   sessions: localforage.createInstance({ name: DB_NAME, storeName: 'sessions' }),
-  settings: localforage.createInstance({ name: DB_NAME, storeName: 'settings' })
+  settings: localforage.createInstance({ name: DB_NAME, storeName: 'settings' }),
+  wordLookups: localforage.createInstance({ name: DB_NAME, storeName: 'word-lookups' }),
+  vocab: localforage.createInstance({ name: DB_NAME, storeName: 'vocab' })
 }
 
 function createEmptyMeta(id: string, title: string): AppDocumentMeta {
@@ -180,6 +184,36 @@ export async function deleteDocument(id: string): Promise<void> {
     stores.translations.removeItem(id),
     stores.sentenceTranslations.removeItem(id),
     stores.annotations.removeItem(id),
-    stores.sessions.removeItem(id)
+    stores.sessions.removeItem(id),
+    stores.wordLookups.removeItem(id)
   ])
+}
+
+const VOCAB_KEY = 'global-vocab'
+
+export async function getWordLookupBundle(documentId: string): Promise<Record<string, WordLookupRecord>> {
+  return (await stores.wordLookups.getItem<Record<string, WordLookupRecord>>(documentId)) ?? {}
+}
+
+export async function saveWordLookupRecord(documentId: string, record: WordLookupRecord): Promise<void> {
+  const bundle = await getWordLookupBundle(documentId)
+  bundle[record.id] = record
+  await stores.wordLookups.setItem(documentId, bundle)
+}
+
+export async function getVocabBundle(): Promise<VocabBundle> {
+  return (
+    (await stores.vocab.getItem<VocabBundle>(VOCAB_KEY)) ??
+    { entries: [], updatedAt: Date.now() }
+  )
+}
+
+export async function saveVocabBundle(bundle: Omit<VocabBundle, 'updatedAt'>): Promise<void> {
+  await stores.vocab.setItem(VOCAB_KEY, { ...bundle, updatedAt: Date.now() })
+}
+
+export async function removeVocabEntry(id: string): Promise<void> {
+  const bundle = await getVocabBundle()
+  const next = { ...bundle, entries: bundle.entries.filter(e => e.id !== id) }
+  await saveVocabBundle(next)
 }

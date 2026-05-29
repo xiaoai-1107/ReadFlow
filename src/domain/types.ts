@@ -148,3 +148,34 @@ export interface TranslationProviderResult {
   provider: string
   source: 'provider'
 }
+
+export type WordLookupStatus = 'idle' | 'loading' | 'loaded' | 'failed'
+
+export interface WordLookupRecord {
+  id: string
+  word: string
+  contextSentenceId: string
+  contextSentenceText: string
+  definition: string
+  status: WordLookupStatus
+  errorCode: TranslationErrorCode
+  errorMessage: string | null
+  updatedAt: number
+}
+
+export interface VocabRecord {
+  id: string
+  word: string
+  definition: string
+  exampleSentence: string
+  documentId: string
+  documentTitle: string
+  paragraphId: string
+  sentenceId: string
+  createdAt: number
+}
+
+export interface VocabBundle {
+  entries: VocabRecord[]
+  updatedAt: number
+}

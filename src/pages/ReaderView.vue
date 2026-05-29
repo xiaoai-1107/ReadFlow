@@ -340,6 +340,10 @@
         <div class="sentence-card-section">
           <div class="sentence-card-label">{{ t('sentenceCardTranslation') }}</div>
           <p v-if="selectedSentenceMeaning" class="sentence-card-meaning">{{ selectedSentenceMeaning }}</p>
+          <template v-else-if="selectedSentenceTranslation?.status === 'failed' && canRetryTranslation(selectedSentenceTranslation)">
+            <p class="muted small">{{ translationErrorText(selectedSentenceTranslation) }}</p>
+            <button class="chip-button subtle-chip" style="margin-top: 8px;" @click="retrySentenceTranslation">{{ t('retrySentenceTranslation') }}</button>
+          </template>
           <p v-else class="muted small">{{ selectedSentenceTranslationMessage }}</p>
         </div>
 
@@ -388,19 +392,36 @@
         <div v-if="activeWord" class="word-card">
           <div class="word-card-head">
             <strong>{{ activeWord }}</strong>
-            <button class="chip-button subtle-chip" @click="playSelectedWord">{{ t('playPronunciation') }}</button>
+            <div style="display: flex; gap: 6px;">
+              <button class="chip-button subtle-chip" @click="playSelectedWord">{{ t('playPronunciation') }}</button>
+              <button
+                :class="['chip-button', 'subtle-chip', { 'vocab-saved': isActiveWordInVocab }]"
+                @click="isActiveWordInVocab ? removeActiveWordFromVocab() : saveActiveWordToVocab()"
+              >
+                {{ isActiveWordInVocab ? t('removeFromVocab') : t('saveToVocab') }}
+              </button>
+            </div>
           </div>
           <div class="word-card-row">
-            <span class="word-card-label">{{ t('phoneticLabel') }}</span>
-            <span class="word-card-value">{{ selectedWordPhonetic }}</span>
-          </div>
-          <div class="word-card-row">
-            <span class="word-card-label">{{ t('pronunciationLabel') }}</span>
-            <span class="word-card-value">{{ t('playPronunciation') }}</span>
-          </div>
-          <div class="word-card-row">
-            <span class="word-card-label">{{ t('meaningInSentence') }}</span>
-            <span class="word-card-value">{{ activeWordMeaning }}</span>
+            <span class="word-card-label">{{ t('wordDefinition') }}</span>
+            <span class="word-card-value">
+              <template v-if="activeWordLookup?.status === 'loading'">
+                <span class="muted">{{ t('wordLookupLoading') }}</span>
+              </template>
+              <template v-else-if="activeWordDefinition">
+                {{ activeWordDefinition }}
+              </template>
+              <template v-else-if="activeWordLookup?.status === 'failed'">
+                <span class="muted small">{{ t('wordLookupFailed') }}</span>
+                <button class="chip-button subtle-chip" style="margin-left: 6px; padding: 4px 8px; font-size: .8rem;" @click="retryWordLookup">{{ t('retryWordLookup') }}</button>
+              </template>
+              <template v-else-if="!translationProviderConfigured">
+                <span class="muted small">{{ t('wordLookupUnavailable') }}</span>
+              </template>
+              <template v-else>
+                <span class="muted small">{{ activeWordMeaning }}</span>
+              </template>
+            </span>
           </div>
         </div>
       </div>
@@ -559,10 +580,15 @@
             <button :class="['study-tab', { active: studyView === 'highlights' }]" @click="openStudyPanel('highlights')">{{ t('highlights') }}</button>
             <button :class="['study-tab', { active: studyView === 'tags' }]" @click="openTagReview()">{{ t('tags') }}</button>
             <button :class="['study-tab', { active: studyView === 'recent' }]" @click="openStudyPanel('recent')">{{ t('recentlyRead') }}</button>
+            <button :class="['study-tab', { active: studyView === 'vocab' }]" @click="openStudyPanel('vocab')">{{ t('vocab') }}</button>
           </div>
           <section v-if="studyView === 'highlights'" class="panel compact-panel">
             <div class="panel-label">{{ t('highlights') }}</div>
             <p class="muted">{{ t('highlightsReviewBody') }}</p>
+            <div class="chip-row top-gap">
+              <button class="chip-button subtle-chip" @click="exportHighlights('markdown')">{{ t('exportAsMarkdown') }}</button>
+              <button class="chip-button subtle-chip" @click="exportHighlights('txt')">{{ t('exportAsTxt') }}</button>
+            </div>
             <div class="tag-review-list top-gap">
               <button
                 v-for="item in highlightReviewItems"
@@ -606,6 +632,30 @@
               </button>
               <p v-if="studyActiveReviewItems.length === 0" class="muted small">{{ t('noHighlightsLinkedToTag') }}</p>
             </div>
+            <div v-if="activeReviewTag" class="chip-row top-gap">
+              <button class="chip-button subtle-chip" @click="exportHighlights('markdown', activeReviewTag.id)">{{ t('exportAsMarkdown') }}</button>
+              <button class="chip-button subtle-chip" @click="exportHighlights('txt', activeReviewTag.id)">{{ t('exportAsTxt') }}</button>
+            </div>
+          </section>
+          <section v-else-if="studyView === 'vocab'" class="panel compact-panel">
+            <div class="panel-label">{{ t('vocab') }}</div>
+            <p class="muted">{{ t('vocabEmpty') }}</p>
+            <div class="tag-review-list top-gap">
+              <div
+                v-for="entry in vocabStore.sortedEntries"
+                :key="entry.id"
+                class="vocab-entry"
+              >
+                <div class="vocab-entry-head">
+                  <strong>{{ entry.word }}</strong>
+                  <button class="chip-button subtle-chip" style="padding: 4px 8px; font-size: .8rem;" @click="removeVocabEntry(entry.id)">{{ t('vocabDeleteEntry') }}</button>
+                </div>
+                <p class="vocab-definition">{{ entry.definition }}</p>
+                <p class="vocab-example muted small">"{{ entry.exampleSentence }}"</p>
+                <p class="vocab-source muted small">{{ t('vocabEntryFrom', { title: entry.documentTitle }) }}</p>
+              </div>
+              <p v-if="vocabStore.sortedEntries.length === 0" class="muted small">{{ t('vocabEmpty') }}</p>
+            </div>
           </section>
           <section v-else class="panel compact-panel">
             <div class="panel-label">{{ t('recentReviewTitle') }}</div>
@@ -637,12 +687,14 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch, type ComponentPublicInstance } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useWindowScroll, useWindowSize } from '@vueuse/core'
-import type { HighlightRecord, ParagraphUnit, ReaderMode, SentenceTranslationRecord, SentenceUnit, TagRecord, TranslationRecord, UiLanguage } from '../domain/types'
+import type { HighlightRecord, ParagraphUnit, ReaderMode, SentenceTranslationRecord, SentenceUnit, TagRecord, TranslationRecord, UiLanguage, WordLookupRecord } from '../domain/types'
 import { deleteDocument } from '../services/storage'
 import { usePreferencesStore } from '../stores/preferences'
 import { getReaderCopy, getTranslationErrorCopy, localizeReaderLoadError } from '../utils/readerUi'
 import { HIGHLIGHT_COLOR_OPTIONS, useHighlightStore } from '../stores/highlight'
 import { useReaderStore } from '../stores/reader'
+import { useWordLookupStore } from '../stores/wordLookup'
+import { useVocabStore } from '../stores/vocab'
 import {
   appendReaderDebugSample,
   incrementReaderDebugCounter,
@@ -701,13 +753,15 @@ interface SelectionRect {
   height: number
 }
 
-type StudyView = 'highlights' | 'tags' | 'recent'
+type StudyView = 'highlights' | 'tags' | 'recent' | 'vocab'
 
 const route = useRoute()
 const router = useRouter()
 const readerStore = useReaderStore()
 const highlightStore = useHighlightStore()
 const preferencesStore = usePreferencesStore()
+const wordLookupStore = useWordLookupStore()
+const vocabStore = useVocabStore()
 
 const readerPageRef = ref<HTMLElement | null>(null)
 const toolbarRef = ref<HTMLElement | null>(null)
@@ -1085,7 +1139,25 @@ const selectedSentenceTranslationMessage = computed(() => {
   return t('translationWillBeCached')
 })
 const activeWordMeaning = computed(() => selectedSentenceMeaning.value || t('wordMeaningUnavailable'))
-const selectedWordPhonetic = computed(() => t('phoneticUnavailable'))
+
+const activeWordLookup = computed<WordLookupRecord | null>(() => {
+  if (!activeWord.value || !selectedSentenceId.value) {
+    return null
+  }
+  return wordLookupStore.getLookup(activeWord.value, selectedSentenceId.value)
+})
+
+const activeWordDefinition = computed(() => {
+  const record = activeWordLookup.value
+  if (!record) return ''
+  if (record.status === 'loaded' && record.definition) return record.definition
+  return ''
+})
+
+const isActiveWordInVocab = computed(() => {
+  if (!activeWord.value || !selectedSentenceId.value) return false
+  return vocabStore.isWordSaved(activeWord.value, selectedSentenceId.value)
+})
 
 const structureItems = computed<StructureItem[]>(() => {
   const groups = new Map<number, ParagraphUnit[]>()
@@ -1501,6 +1573,8 @@ function resetSelection() {
 async function loadReader() {
   await readerStore.loadDocument(documentId.value)
   await highlightStore.loadForDocument(documentId.value)
+  await wordLookupStore.loadForDocument(documentId.value)
+  await vocabStore.load()
   await nextTick()
   updateMobileLayoutMetrics('load-reader-ready')
   setupObserver()
@@ -1857,6 +1931,156 @@ async function retryTranslation(paragraphId: string | null) {
   pushToast(t('translationRetried'), 'info')
 }
 
+async function retrySentenceTranslation() {
+  if (!selectedSentenceId.value) {
+    return
+  }
+
+  await readerStore.ensureSentenceTranslation(selectedSentenceId.value, true)
+  pushToast(t('sentenceTranslationRetried'), 'info')
+}
+
+async function retryWordLookup() {
+  if (!activeWord.value || !selectedSentenceId.value || !sentenceSelection.value) {
+    return
+  }
+
+  await wordLookupStore.lookup(
+    activeWord.value,
+    selectedSentenceId.value,
+    sentenceSelection.value.sentence.text,
+    true
+  )
+}
+
+async function saveActiveWordToVocab() {
+  if (!activeWord.value || !selectedSentenceId.value || !sentenceSelection.value) {
+    return
+  }
+
+  const paragraph = paragraphs.value.find(p => p.id === sentenceSelection.value?.paragraphId)
+  void paragraph
+  await vocabStore.addEntry({
+    word: activeWord.value,
+    definition: activeWordDefinition.value || activeWordMeaning.value || '',
+    exampleSentence: sentenceSelection.value.sentence.text,
+    documentId: documentId.value,
+    documentTitle: documentTitle.value,
+    paragraphId: sentenceSelection.value.paragraphId,
+    sentenceId: selectedSentenceId.value
+  })
+  pushToast(t('wordSavedToVocab'), 'success')
+}
+
+async function removeActiveWordFromVocab() {
+  if (!activeWord.value || !selectedSentenceId.value) {
+    return
+  }
+
+  const entry = vocabStore.entries.find(
+    e =>
+      e.word.toLowerCase() === activeWord.value!.toLowerCase() &&
+      e.sentenceId === selectedSentenceId.value
+  )
+  if (entry) {
+    await vocabStore.removeEntry(entry.id)
+    pushToast(t('wordRemovedFromVocab'), 'info')
+  }
+}
+
+async function removeVocabEntry(id: string) {
+  await vocabStore.removeEntry(id)
+}
+
+function buildExportMarkdown(highlights: HighlightRecord[], tagFilter: string | null): string {
+  const title = documentTitle.value
+  const date = new Date().toISOString().slice(0, 10)
+  const tagName = tagFilter
+    ? highlightStore.tags.find(tag => tag.id === tagFilter)?.name ?? tagFilter
+    : null
+
+  const header = tagName
+    ? `# ${title} — 高亮摘录（标签：${tagName}）\n\n> 导出时间：${date}\n\n---\n\n`
+    : `# ${title} — 高亮摘录\n\n> 导出时间：${date}\n\n---\n\n`
+
+  const items = highlights.map(hl => {
+    const paragraph = paragraphs.value.find(p => p.id === hl.paragraphId)
+    const location = paragraph
+      ? `P${paragraph.pageIndex + 1} · 段落 ${paragraph.order + 1}`
+      : '未知位置'
+    const tags = highlightStore.tagsForHighlight(hl.id)
+    const tagLine = tags.length > 0 ? `**标签**: ${tags.map(t => t.name).join(', ')}\n\n` : ''
+    return `### ${location}\n\n${hl.textSnapshot}\n\n${tagLine}`
+  })
+
+  return header + items.join('---\n\n')
+}
+
+function buildExportTxt(highlights: HighlightRecord[], tagFilter: string | null): string {
+  const title = documentTitle.value
+  const date = new Date().toISOString().slice(0, 10)
+  const tagName = tagFilter
+    ? highlightStore.tags.find(tag => tag.id === tagFilter)?.name ?? tagFilter
+    : null
+
+  const header = tagName
+    ? `${title} — 高亮摘录（标签：${tagName}）\n导出时间：${date}\n${'='.repeat(40)}\n\n`
+    : `${title} — 高亮摘录\n导出时间：${date}\n${'='.repeat(40)}\n\n`
+
+  const items = highlights.map(hl => {
+    const paragraph = paragraphs.value.find(p => p.id === hl.paragraphId)
+    const location = paragraph
+      ? `[P${paragraph.pageIndex + 1} · 段落 ${paragraph.order + 1}]`
+      : '[未知位置]'
+    const tags = highlightStore.tagsForHighlight(hl.id)
+    const tagLine = tags.length > 0 ? `标签: ${tags.map(t => t.name).join(', ')}\n` : ''
+    return `${location}\n${hl.textSnapshot}\n${tagLine}`
+  })
+
+  return header + items.join('\n' + '-'.repeat(40) + '\n\n')
+}
+
+function triggerDownload(content: string, filename: string, mimeType: string) {
+  const blob = new Blob([content], { type: mimeType })
+  const url = URL.createObjectURL(blob)
+  const anchor = document.createElement('a')
+  anchor.href = url
+  anchor.download = filename
+  document.body.appendChild(anchor)
+  anchor.click()
+  document.body.removeChild(anchor)
+  URL.revokeObjectURL(url)
+}
+
+function exportHighlights(format: 'markdown' | 'txt', tagFilter: string | null = null) {
+  let highlights = [...highlightStore.highlights]
+
+  if (tagFilter) {
+    const tag = highlightStore.tags.find(t => t.id === tagFilter)
+    if (tag) {
+      highlights = highlights.filter(hl => tag.highlightIds.includes(hl.id))
+    }
+  }
+
+  if (highlights.length === 0) {
+    pushToast(t('noHighlightsToExport'), 'error')
+    return
+  }
+
+  const slug = documentTitle.value.replace(/[^a-zA-Z0-9\u4e00-\u9fa5]+/g, '-').slice(0, 40)
+  const date = new Date().toISOString().slice(0, 10)
+
+  if (format === 'markdown') {
+    const content = buildExportMarkdown(highlights, tagFilter)
+    triggerDownload(content, `${slug}-highlights-${date}.md`, 'text/markdown;charset=utf-8')
+  } else {
+    const content = buildExportTxt(highlights, tagFilter)
+    triggerDownload(content, `${slug}-highlights-${date}.txt`, 'text/plain;charset=utf-8')
+  }
+
+  pushToast(t('exportDone'), 'success')
+}
+
 function jumpToHighlightItem(item: ReviewHighlightItem) {
   resetSelection()
   closeMobilePanels()
@@ -2073,6 +2297,21 @@ watch(
     nextTick(() => {
       refreshSelectionGeometry()
     })
+  }
+)
+
+watch(
+  () => activeWord.value,
+  (word) => {
+    if (!word || !selectedSentenceId.value || !sentenceSelection.value) {
+      return
+    }
+
+    void wordLookupStore.lookup(
+      word,
+      selectedSentenceId.value,
+      sentenceSelection.value.sentence.text
+    )
   }
 )
 
@@ -2357,6 +2596,18 @@ onBeforeUnmount(() => {
 .word-card-row { display: grid; grid-template-columns: 88px minmax(0, 1fr); gap: 10px; margin-top: 8px; }
 .word-card-label { color: var(--rf-text-muted); font-size: .82rem; }
 .word-card-value { line-height: 1.55; }
+.vocab-saved { background: rgba(47, 106, 79, .12); color: var(--rf-success); }
+.vocab-entry {
+  padding: 10px 12px;
+  border: 1px solid rgba(201, 194, 184, .72);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, .88);
+}
+.vocab-entry + .vocab-entry { margin-top: 8px; }
+.vocab-entry-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 4px; }
+.vocab-definition { margin: 4px 0; line-height: 1.55; overflow-wrap: anywhere; word-break: break-word; }
+.vocab-example { margin: 4px 0; font-style: italic; line-height: 1.45; overflow-wrap: anywhere; word-break: break-word; }
+.vocab-source { margin: 4px 0; }
 .mobile-fab { position: fixed; right: 14px; bottom: calc(var(--rf-status-height, 48px) + env(safe-area-inset-bottom) + 14px); z-index: 33; border: 1px solid rgba(201, 194, 184, .84); border-radius: 999px; background: rgba(255, 255, 255, .96); color: var(--rf-primary); padding: 11px 14px; box-shadow: var(--rf-shadow); }
 .overlay { position: fixed; inset: 0; z-index: 35; background: rgba(24,28,36,.24); overscroll-behavior: contain; }
 .drawer, .sheet, .study-modal { position: absolute; pointer-events: auto; background: rgba(251,250,247,.98); box-shadow: var(--rf-shadow); }
