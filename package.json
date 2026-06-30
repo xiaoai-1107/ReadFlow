@@ -8,6 +8,7 @@
   },
   "scripts": {
     "dev": "vite",
+    "dev:host": "vite --host 0.0.0.0",
     "translate:baidu": "node server/baidu-translate-proxy.cjs",
     "build": "vite build",
     "preview": "vite preview",

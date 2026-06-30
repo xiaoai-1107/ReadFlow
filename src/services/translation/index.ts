@@ -20,8 +20,20 @@ export class TranslationServiceError extends Error {
   }
 }
 
+function getAutoTranslationEndpoint(): string {
+  if (typeof window === 'undefined') {
+    return ''
+  }
+
+  const protocol = window.location.protocol || 'http:'
+  const host = window.location.hostname || '127.0.0.1'
+  const port = String(import.meta.env.VITE_READFLOW_TRANSLATION_PORT ?? '8787').trim() || '8787'
+  return `${protocol}//${host}:${port}/api/translate`
+}
+
 function getTranslationEndpoint(): string {
-  return String(import.meta.env.VITE_READFLOW_TRANSLATION_ENDPOINT ?? '').trim()
+  const endpoint = String(import.meta.env.VITE_READFLOW_TRANSLATION_ENDPOINT ?? '').trim()
+  return endpoint.toLowerCase() === 'auto' ? getAutoTranslationEndpoint() : endpoint
 }
 
 export function getTranslationProviderKey(): string {
@@ -57,7 +69,7 @@ export async function translateText(input: TranslationRequestInput): Promise<Tra
     if (import.meta.env.VITE_READFLOW_MOCK_TRANSLATION === 'true') {
       await new Promise(resolve => setTimeout(resolve, 600))
       return {
-        translated: `[译] ${input.text}`,
+        translated: `[mock] ${input.text}`,
         provider: 'mock-provider',
         source: 'provider'
       }
@@ -112,7 +124,7 @@ export async function lookupWordInContext(input: WordLookupInput): Promise<Trans
     if (import.meta.env.VITE_READFLOW_MOCK_TRANSLATION === 'true') {
       await new Promise(resolve => setTimeout(resolve, 400))
       return {
-        translated: `[词义] ${input.word}：在此句中的含义（模拟查词）`,
+        translated: `[mock word] ${input.word}: meaning in this sentence.`,
         provider: 'mock-provider',
         source: 'provider'
       }

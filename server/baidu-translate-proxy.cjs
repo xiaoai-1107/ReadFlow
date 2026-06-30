@@ -38,6 +38,7 @@ for (const fileName of envFiles) {
 
 const config = {
   port: Number(process.env.READFLOW_TRANSLATION_PORT || 8787),
+  host: process.env.READFLOW_TRANSLATION_HOST || process.env.READFLOW_TRANSLATION_BIND_HOST || '127.0.0.1',
   endpoint: process.env.BAIDU_TRANSLATE_ENDPOINT || 'https://fanyi-api.baidu.com/api/trans/vip/translate',
   appId: process.env.BAIDU_TRANSLATE_APP_ID || process.env.BAIDU_TRANSLATE_APPID || '',
   secretKey: process.env.BAIDU_TRANSLATE_SECRET_KEY || process.env.BAIDU_TRANSLATE_KEY || '',
@@ -70,7 +71,11 @@ function resolveCorsOrigin(request) {
     return 'http://127.0.0.1:5173'
   }
 
-  return config.allowedOrigins.has(origin) ? origin : null
+  if (config.allowedOrigins.has('*') || config.allowedOrigins.has(origin)) {
+    return origin
+  }
+
+  return null
 }
 
 function readJsonBody(request) {
@@ -274,7 +279,11 @@ const server = http.createServer((request, response) => {
   }, origin)
 })
 
-server.listen(config.port, '127.0.0.1', () => {
-  console.log(`ReadFlow Baidu translation proxy listening on http://127.0.0.1:${config.port}`)
+server.listen(config.port, config.host, () => {
+  const displayHost = config.host === '0.0.0.0' ? '127.0.0.1' : config.host
+  console.log(`ReadFlow Baidu translation proxy listening on http://${displayHost}:${config.port}`)
+  if (config.host === '0.0.0.0') {
+    console.log('LAN access enabled. Use your computer LAN IP from the mobile device.')
+  }
   console.log(`Provider configured: ${config.appId && config.secretKey ? 'yes' : 'no'}`)
 })
