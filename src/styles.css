@@ -1,27 +1,45 @@
 :root {
-  color-scheme: light;
+  color-scheme: dark;
   font-family: "Segoe UI", "PingFang SC", "Hiragino Sans GB", sans-serif;
-  background: #f5f3ef;
-  color: #1f2937;
+  background: #121212;
+  color: #eaeaea;
   line-height: 1.5;
   font-weight: 400;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  --rf-bg: #f5f3ef;
-  --rf-surface: #fbfaf7;
-  --rf-surface-strong: #ffffff;
-  --rf-border: #ddd8cf;
-  --rf-border-strong: #c9c2b8;
-  --rf-text: #1f2937;
-  --rf-text-muted: #6b7280;
-  --rf-primary: #2d5c92;
-  --rf-primary-soft: rgba(45, 92, 146, 0.12);
-  --rf-highlight: rgba(241, 220, 118, 0.48);
-  --rf-success: #2f6a4f;
-  --rf-danger: #a33b2f;
-  --rf-shadow: 0 12px 36px rgba(34, 30, 24, 0.08);
+  --rf-bg: #121212;
+  --rf-surface: #1a1a1a;
+  --rf-surface-alt: #202020;
+  --rf-surface-strong: #2a2a2a;
+  --rf-surface-raised: #242424;
+  --rf-hover: #303030;
+  --rf-active: #181818;
+  --rf-selected: #1d2d46;
+  --rf-border: #262626;
+  --rf-border-strong: #2e2e2e;
+  --rf-text: #eaeaea;
+  --rf-text-muted: #b8b8b8;
+  --rf-text-weak: #8e8e8e;
+  --rf-primary: #4c8dff;
+  --rf-primary-hover: #6aa1ff;
+  --rf-primary-soft: rgba(76, 141, 255, 0.16);
+  --rf-primary-border: rgba(76, 141, 255, 0.36);
+  --rf-highlight: rgba(214, 184, 90, 0.22);
+  --rf-highlight-strong: rgba(214, 184, 90, 0.34);
+  --rf-success: #72d18b;
+  --rf-warning: #e6b450;
+  --rf-danger: #ff6b6b;
+  --rf-danger-soft: rgba(255, 107, 107, 0.14);
+  --rf-input-bg: #202020;
+  --rf-button-bg: #242424;
+  --rf-button-hover: #303030;
+  --rf-button-active: #1a1a1a;
+  --rf-shadow: 0 16px 42px rgba(0, 0, 0, 0.42);
+  --border-color: var(--rf-border);
+  --primary-color: var(--rf-primary);
+  --text-secondary: var(--rf-text-muted);
 }
 
 * {
@@ -50,6 +68,26 @@ button {
   cursor: pointer;
 }
 
+button:disabled,
+input:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
+}
+
+input {
+  color: var(--rf-text);
+}
+
+input::placeholder {
+  color: var(--rf-text-weak);
+}
+
+button:focus-visible,
+input:focus-visible {
+  outline: 2px solid var(--rf-primary);
+  outline-offset: 2px;
+}
+
 a {
   color: inherit;
   text-decoration: none;
@@ -57,8 +95,5 @@ a {
 
 .rf-page-shell {
   min-height: 100dvh;
-  background:
-    radial-gradient(circle at top right, rgba(45, 92, 146, 0.08), transparent 28%),
-    radial-gradient(circle at top left, rgba(241, 220, 118, 0.1), transparent 26%),
-    var(--rf-bg);
+  background: var(--rf-bg);
 }

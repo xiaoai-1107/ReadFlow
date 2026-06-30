@@ -163,13 +163,14 @@ function formatStatus(status: AppDocumentMeta['status']) {
 <style scoped>
 .library-page { padding: 32px; }
 .library-hero { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(280px, 0.8fr); gap: 24px; margin: 0 auto 28px; max-width: 1240px; }
-.library-copy, .hero-panel, .library-section { background: rgba(251, 250, 247, 0.9); border: 1px solid rgba(201, 194, 184, 0.72); border-radius: 24px; box-shadow: var(--rf-shadow); }
+.library-copy, .hero-panel, .library-section { background: var(--rf-surface); border: 1px solid var(--rf-border-strong); border-radius: 24px; box-shadow: var(--rf-shadow); }
 .library-copy { padding: 40px; }
 .eyebrow { margin: 0 0 10px; color: var(--rf-primary); font-size: 12px; font-weight: 700; letter-spacing: 0.18em; text-transform: uppercase; }
 .library-copy h1 { margin: 0; max-width: 12ch; font-size: clamp(2rem, 4vw, 3.5rem); line-height: 1.05; }
 .hero-text { margin: 18px 0 0; max-width: 42rem; color: var(--rf-text-muted); font-size: 1.04rem; }
 .hero-actions { margin-top: 28px; }
-.primary-upload { display: inline-flex; align-items: center; justify-content: center; min-width: 160px; padding: 13px 18px; border-radius: 999px; background: var(--rf-primary); color: #fff; font-weight: 600; }
+.primary-upload { display: inline-flex; align-items: center; justify-content: center; min-width: 160px; padding: 13px 18px; border-radius: 999px; background: var(--rf-primary); color: #ffffff; font-weight: 600; }
+.primary-upload:hover { background: var(--rf-primary-hover); }
 .primary-upload input { display: none; }
 .error-text { margin: 12px 0 0; color: var(--rf-danger); }
 .hero-panel { padding: 28px; }
@@ -183,17 +184,19 @@ function formatStatus(status: AppDocumentMeta['status']) {
 .empty-state { padding: 40px 24px; border: 1px dashed var(--rf-border-strong); border-radius: 20px; color: var(--rf-text-muted); text-align: center; }
 .empty-state h3 { margin: 0 0 8px; color: var(--rf-text); }
 .document-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px; }
-.document-card { display: flex; flex-direction: column; gap: 14px; padding: 18px; border: 1px solid var(--rf-border); border-radius: 20px; background: var(--rf-surface-strong); }
+.document-card { display: flex; flex-direction: column; gap: 14px; padding: 18px; border: 1px solid var(--rf-border); border-radius: 20px; background: var(--rf-surface-alt); }
 .document-open { display: grid; grid-template-columns: 84px minmax(0, 1fr); gap: 16px; border: none; background: transparent; padding: 0; text-align: left; }
-.document-cover { display: flex; align-items: end; justify-content: center; min-height: 112px; border-radius: 16px; background: linear-gradient(180deg, rgba(45, 92, 146, 0.92), rgba(33, 53, 82, 0.94)), #2d5c92; color: #f8fafc; font-weight: 700; letter-spacing: 0.08em; }
+.document-cover { display: flex; align-items: end; justify-content: center; min-height: 112px; border-radius: 16px; background: linear-gradient(180deg, rgba(76, 141, 255, 0.82), rgba(29, 45, 70, 0.96)), #1d2d46; color: #f8fafc; font-weight: 700; letter-spacing: 0.08em; }
 .document-body h3 { margin: 2px 0 8px; font-size: 1.02rem; }
 .document-body p { margin: 0; color: var(--rf-text-muted); font-size: 0.94rem; }
 .document-meta { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px; font-size: 0.82rem; }
 .document-meta span { padding: 4px 8px; border-radius: 999px; background: var(--rf-primary-soft); color: var(--rf-primary); }
 .document-meta.muted span { background: transparent; color: var(--rf-text-muted); padding: 0; }
 .document-actions { display: flex; gap: 10px; }
-.secondary-button, .ghost-button { border-radius: 999px; padding: 10px 14px; border: 1px solid var(--rf-border-strong); background: transparent; }
-.secondary-button { background: var(--rf-surface); color: var(--rf-primary); border-color: rgba(45, 92, 146, 0.24); }
+.secondary-button, .ghost-button { border-radius: 999px; padding: 10px 14px; border: 1px solid var(--rf-border-strong); background: var(--rf-button-bg); color: var(--rf-text); }
+.secondary-button { background: var(--rf-primary-soft); color: var(--rf-primary); border-color: var(--rf-primary-border); }
+.secondary-button:hover, .ghost-button:hover { background: var(--rf-button-hover); }
+.secondary-button:active, .ghost-button:active { background: var(--rf-button-active); }
 .ghost-button.danger { color: var(--rf-danger); }
 @media (max-width: 900px) {
   .library-page { padding: 16px; }
