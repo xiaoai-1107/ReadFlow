@@ -8,6 +8,7 @@
   },
   "scripts": {
     "dev": "vite",
+    "translate:baidu": "node server/baidu-translate-proxy.cjs",
     "build": "vite build",
     "preview": "vite preview",
     "typecheck": "vue-tsc --noEmit",

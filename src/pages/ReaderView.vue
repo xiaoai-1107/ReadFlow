@@ -151,71 +151,78 @@
         </aside>
 
         <main ref="contentRef" :class="['content', { mobile: isMobile }]" data-testid="reader-content">
-          <article
-            v-for="paragraph in paragraphs"
-            :id="paragraph.id"
-            :key="paragraph.id"
-            data-testid="paragraph"
-            :data-paragraph-id="paragraph.id"
-            :class="[
-              'paragraph',
-              {
-                current: paragraph.id === currentParagraphId,
-                highlighted: isParagraphHighlighted(paragraph.id)
-              }
-            ]"
-            :style="paragraphHighlightStyle(paragraph.id)"
-          >
-            <div class="paragraph-index">{{ paragraph.order + 1 }}</div>
-            <div>
-              <p class="paragraph-text">
-                <span
-                  v-for="(sentence, sentenceIndex) in paragraph.sentences"
-                  :key="sentence.id"
-                  class="sentence-shell"
-                >
-                  <span
-                    v-for="fragment in getSentenceFragments(sentence)"
-                    :key="fragment.id"
-                    :ref="element => registerFragmentElement(sentence.id, fragment.id, element)"
-                    role="button"
-                    tabindex="0"
-                    :data-fragment-id="fragment.id"
-                    data-testid="sentence-fragment"
-                    :data-selected="fragment.id === sentenceSelection?.fragment.id ? 'true' : 'false'"
-                    :class="[
-                      'sentence-fragment',
-                      {
-                        selected: fragment.id === sentenceSelection?.fragment.id,
-                        marked: isSentenceHighlighted(sentence.id)
-                      }
-                    ]"
-                    :style="sentenceHighlightStyle(sentence.id)"
-                    @click.stop="selectSentenceFragment(paragraph, sentence, sentenceIndex, fragment, $event)"
-                  >
-                    {{ fragment.displayText }}
-                  </span>
-                  <span v-if="needsSentenceSpacer(sentence.text)" class="sentence-spacer"> </span>
-                </span>
-              </p>
+          <div class="book-page">
+            <template v-for="(paragraph, paragraphIndex) in paragraphs" :key="paragraph.id">
+              <article
+                :id="paragraph.id"
+                data-testid="paragraph"
+                :data-paragraph-id="paragraph.id"
+                :data-layout-role="paragraph.layoutRole || 'body'"
+                :class="[
+                  'paragraph',
+                  paragraphLayoutClass(paragraph),
+                  {
+                    current: paragraph.id === currentParagraphId,
+                    highlighted: isParagraphHighlighted(paragraph.id)
+                  }
+                ]"
+                :style="paragraphHighlightStyle(paragraph.id)"
+              >
+                <div class="paragraph-index">{{ paragraph.order + 1 }}</div>
+                <div class="paragraph-body">
+                  <p class="paragraph-text">
+                    <span
+                      v-for="(sentence, sentenceIndex) in paragraph.sentences"
+                      :key="sentence.id"
+                      class="sentence-shell"
+                    >
+                      <span
+                        v-for="fragment in getSentenceFragments(sentence)"
+                        :key="fragment.id"
+                        :ref="element => registerFragmentElement(sentence.id, fragment.id, element)"
+                        role="button"
+                        tabindex="0"
+                        :data-fragment-id="fragment.id"
+                        data-testid="sentence-fragment"
+                        :data-selected="fragment.id === sentenceSelection?.fragment.id ? 'true' : 'false'"
+                        :class="[
+                          'sentence-fragment',
+                          {
+                            selected: fragment.id === sentenceSelection?.fragment.id,
+                            marked: isSentenceHighlighted(sentence.id)
+                          }
+                        ]"
+                        :style="sentenceHighlightStyle(sentence.id)"
+                        @click.stop="selectSentenceFragment(paragraph, sentence, sentenceIndex, fragment, $event)"
+                      >
+                        {{ fragment.displayText }}
+                      </span>
+                    </span>
+                  </p>
 
-              <div v-if="mode === 'translation'" class="translation-block">
-                <p v-if="hasLiveTranslation(translationFor(paragraph.id))" class="translation-text">
-                  {{ translationFor(paragraph.id)?.translatedText }}
-                </p>
-                <div v-else-if="isTranslationUnavailable(translationFor(paragraph.id)) || !translationProviderConfigured" class="inline-status error">
-                  <span>{{ t('translationServiceUnavailable') }}</span>
+                  <div v-if="mode === 'translation'" class="translation-block">
+                    <p v-if="hasLiveTranslation(translationFor(paragraph.id))" class="translation-text">
+                      {{ translationFor(paragraph.id)?.translatedText }}
+                    </p>
+                    <div v-else-if="isTranslationUnavailable(translationFor(paragraph.id)) || !translationProviderConfigured" class="inline-status error">
+                      <span>{{ t('translationServiceUnavailable') }}</span>
+                    </div>
+                    <div v-else-if="translationFor(paragraph.id)?.status === 'failed'" class="inline-status error">
+                      <span>{{ translationErrorText(translationFor(paragraph.id)) }}</span>
+                      <button v-if="canRetryTranslation(translationFor(paragraph.id))" @click="retryTranslation(paragraph.id)">{{ t('retryTranslation') }}</button>
+                    </div>
+                    <div v-else class="inline-status">
+                      <span>{{ translationFor(paragraph.id)?.status === 'translating' ? t('translationLoadingCurrent') : t('translationLoadingAround') }}</span>
+                    </div>
+                  </div>
                 </div>
-                <div v-else-if="translationFor(paragraph.id)?.status === 'failed'" class="inline-status error">
-                  <span>{{ translationErrorText(translationFor(paragraph.id)) }}</span>
-                  <button v-if="canRetryTranslation(translationFor(paragraph.id))" @click="retryTranslation(paragraph.id)">{{ t('retryTranslation') }}</button>
-                </div>
-                <div v-else class="inline-status">
-                  <span>{{ translationFor(paragraph.id)?.status === 'translating' ? t('translationLoadingCurrent') : t('translationLoadingAround') }}</span>
-                </div>
+              </article>
+
+              <div v-if="isLastParagraphOnPage(paragraphIndex)" class="page-marker">
+                — Page {{ paragraph.pageIndex + 1 }} —
               </div>
-            </div>
-          </article>
+            </template>
+          </div>
         </main>
 
         <aside v-if="!isMobile" class="details">
@@ -1192,6 +1199,16 @@ const structureItems = computed<StructureItem[]>(() => {
   })
 })
 
+function paragraphLayoutClass(paragraph: ParagraphUnit) {
+  return `paragraph-${paragraph.layoutRole || 'body'}`
+}
+
+function isLastParagraphOnPage(paragraphIndex: number) {
+  const paragraph = paragraphs.value[paragraphIndex]
+  const nextParagraph = paragraphs.value[paragraphIndex + 1]
+  return Boolean(paragraph && (!nextParagraph || nextParagraph.pageIndex !== paragraph.pageIndex))
+}
+
 const tagReviewGroups = computed<TagReviewGroup[]>(() =>
   [...highlightStore.tags]
     .map(tag => ({
@@ -1741,10 +1758,6 @@ function translationFor(paragraphId: string) {
 
 function getSentenceFragments(sentence: ParagraphUnit['sentences'][number]) {
   return buildInteractionFragments(sentence.id, sentence.text)
-}
-
-function needsSentenceSpacer(sentenceText: string) {
-  return /\S$/.test(sentenceText)
 }
 
 function paragraphHighlightStyle(paragraphId: string) {
@@ -2459,22 +2472,43 @@ onBeforeUnmount(() => {
 .structure-item.active { border-color: var(--rf-primary-border); background: var(--rf-selected); }
 .structure-index { color: var(--rf-text); font-size: .86rem; font-weight: 600; }
 .structure-meta { color: var(--rf-text-muted); font-size: .82rem; line-height: 1.45; }
-.content { min-width: 0; min-height: 0; overflow: visible; overscroll-behavior: auto; -webkit-overflow-scrolling: touch; padding: 30px clamp(14px, 3.8vw, 56px) 140px; border-radius: 28px; background: var(--rf-surface-alt); }
-.content.mobile { min-height: 0; overflow: visible; overscroll-behavior: auto; padding: 12px 12px calc(var(--rf-mobile-bottom-offset, 156px) + env(safe-area-inset-bottom)); border: none; border-radius: 0; background: transparent; box-shadow: none; }
-.paragraph { position: relative; display: grid; grid-template-columns: 28px minmax(0, 1fr); gap: 18px; min-width: 0; padding: 12px 0 18px; border-bottom: 1px solid var(--rf-border); scroll-margin-top: calc(var(--rf-toolbar-height, 88px) + 16px); scroll-margin-bottom: calc(var(--rf-status-height, 56px) + 16px); }
-.paragraph:last-child { border-bottom: none; }
-.paragraph.current::before, .paragraph.highlighted::before { content: ''; position: absolute; left: -18px; top: 14px; bottom: 18px; width: 2px; border-radius: 999px; }
-.paragraph.current::before { background: var(--rf-primary); }
+.content { display: flex; justify-content: center; min-width: 0; min-height: 0; overflow: visible; overscroll-behavior: auto; -webkit-overflow-scrolling: touch; padding: 28px clamp(16px, 3vw, 42px) 140px; border: none; border-radius: 28px; background: #151515; box-shadow: none; }
+.book-page { width: min(100%, 860px); min-height: calc(var(--rf-reader-viewport-height, 100dvh) - 220px); padding: clamp(48px, 6vw, 72px) clamp(64px, 7vw, 96px); border: 1px solid var(--rf-border-strong); border-radius: 18px; background: #1e1e1e; box-shadow: 0 22px 60px rgba(0, 0, 0, .38); }
+.content.mobile { min-height: 0; overflow: visible; overscroll-behavior: auto; padding: 10px 10px calc(var(--rf-mobile-bottom-offset, 156px) + env(safe-area-inset-bottom)); border: none; border-radius: 0; background: transparent; box-shadow: none; }
+.content.mobile .book-page { width: 100%; min-height: auto; padding: 34px 22px 44px; border-radius: 16px; }
+.paragraph { position: relative; display: grid; grid-template-columns: 42px minmax(0, 1fr); gap: 18px; min-width: 0; padding: 0; border-bottom: none; scroll-margin-top: calc(var(--rf-toolbar-height, 88px) + 22px); scroll-margin-bottom: calc(var(--rf-status-height, 56px) + 18px); }
+.paragraph + .paragraph { margin-top: 1.2em; }
+.paragraph.current, .paragraph.highlighted { border-radius: 8px; background: rgba(76, 141, 255, .045); }
 .paragraph.highlighted { background: var(--rf-highlight); }
+.paragraph.current::before, .paragraph.highlighted::before { content: ''; position: absolute; left: 50px; top: .22em; bottom: .22em; width: 2px; border-radius: 999px; }
+.paragraph.current::before { background: var(--rf-primary); }
 .paragraph.highlighted::before { background: var(--rf-highlight-strong); }
-.paragraph-index { padding-top: 4px; color: var(--rf-text-weak); font-size: .78rem; text-align: right; }
-.paragraph-text, .translation-text { margin: 0; max-width: 78ch; font-size: clamp(1rem, 1.05vw, 1.08rem); line-height: 1.88; overflow-wrap: anywhere; word-break: break-word; }
-.translation-block { margin-top: 12px; max-width: 78ch; }
+.paragraph.current.highlighted::before { background: var(--rf-primary); }
+.paragraph-index { padding-top: .42em; color: var(--rf-text-weak); font-family: "Segoe UI", "PingFang SC", sans-serif; font-size: .72rem; line-height: 1; text-align: right; opacity: 0; transition: opacity .16s ease; user-select: none; }
+.paragraph:hover .paragraph-index, .paragraph.current .paragraph-index, .paragraph.highlighted .paragraph-index { opacity: .68; }
+.paragraph-body { min-width: 0; padding-left: 10px; }
+.paragraph-text, .translation-text { margin: 0; max-width: 100%; font-family: Georgia, "Times New Roman", Times, serif; font-size: 18px; line-height: 1.76; color: #e7e3dc; overflow-wrap: anywhere; word-break: normal; }
+.translation-block { margin-top: .8em; max-width: 100%; }
 .translation-text { color: var(--rf-text-muted); }
+.translation-text { font-family: "Noto Serif SC", "Source Han Serif SC", "Songti SC", Georgia, serif; font-size: 17px; line-height: 1.78; }
+.page-marker { display: flex; align-items: center; gap: 18px; margin: 38px 0 34px; color: var(--rf-text-weak); font-family: "Segoe UI", "PingFang SC", sans-serif; font-size: .78rem; letter-spacing: .08em; text-align: center; text-transform: uppercase; }
+.page-marker::before, .page-marker::after { content: ''; flex: 1; height: 1px; background: var(--rf-border); }
+.page-marker:last-child { margin-bottom: 0; }
+.paragraph-title { display: block; margin: 0 0 2.1em; text-align: center; }
+.paragraph-title .paragraph-index, .paragraph-heading .paragraph-index, .paragraph-copyright .paragraph-index { display: none; }
+.paragraph-title .paragraph-body, .paragraph-heading .paragraph-body, .paragraph-copyright .paragraph-body { padding-left: 0; }
+.paragraph-title .paragraph-text { font-family: Georgia, "Times New Roman", Times, serif; font-size: clamp(2rem, 4vw, 3.2rem); line-height: 1.18; font-weight: 700; color: var(--rf-text); }
+.paragraph-heading { display: block; margin: 2.2em 0 1em; }
+.paragraph-heading .paragraph-text { font-family: "Segoe UI", "PingFang SC", sans-serif; font-size: 1.28rem; line-height: 1.35; font-weight: 700; color: var(--rf-text); }
+.paragraph-toc, .paragraph-list { grid-template-columns: 32px minmax(0, 1fr); margin-top: .75em; }
+.paragraph-toc .paragraph-text, .paragraph-list .paragraph-text { font-family: "Segoe UI", "PingFang SC", sans-serif; font-size: 16px; line-height: 1.65; color: var(--rf-text-muted); }
+.paragraph-copyright { display: block; margin: .72em auto; max-width: 58ch; text-align: center; }
+.paragraph-copyright .paragraph-text { font-family: "Segoe UI", "PingFang SC", sans-serif; font-size: .88rem; line-height: 1.65; color: var(--rf-text-weak); }
 .inline-status { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 12px; color: var(--rf-text-muted); font-size: .92rem; }
 .inline-status.error { color: var(--rf-danger); }
 .inline-status button { border: none; background: transparent; color: var(--rf-primary); padding: 0; }
 .sentence-shell { display: inline; }
+.sentence-shell + .sentence-shell::before { content: ' '; white-space: pre; }
 .sentence-fragment {
   appearance: none;
   border: none;
@@ -2507,7 +2541,6 @@ onBeforeUnmount(() => {
   position: relative;
   color: var(--rf-text);
 }
-.sentence-spacer { white-space: pre; }
 .sentence-selection-layer {
   position: fixed;
   inset: 0;
@@ -2667,10 +2700,15 @@ onBeforeUnmount(() => {
   .layout.mobile { margin-top: 8px; }
   .sidebar, .details { position: static; max-height: none; overflow: visible; padding-right: 0; }
   .banner { margin-top: 10px; padding: 8px 12px; border-radius: 14px; font-size: .92rem; }
-  .content { min-height: 0; padding: 0 12px calc(var(--rf-mobile-bottom-offset, 156px) + env(safe-area-inset-bottom)); border-radius: 0; }
-  .paragraph { grid-template-columns: 18px minmax(0, 1fr); gap: 10px; padding: 10px 0 20px; }
-  .paragraph.current::before, .paragraph.highlighted::before { left: -8px; top: 12px; bottom: 20px; }
-  .paragraph-text, .translation-text { max-width: none; font-size: 1.02rem; line-height: 1.92; }
+  .content { min-height: 0; padding: 10px 10px calc(var(--rf-mobile-bottom-offset, 156px) + env(safe-area-inset-bottom)); border-radius: 0; }
+  .paragraph { grid-template-columns: 28px minmax(0, 1fr); gap: 12px; padding: 0; }
+  .paragraph + .paragraph { margin-top: 1.08em; }
+  .paragraph.current::before, .paragraph.highlighted::before { left: 35px; top: .2em; bottom: .2em; }
+  .paragraph-body { padding-left: 6px; }
+  .paragraph-text, .translation-text { max-width: none; font-size: 17px; line-height: 1.76; }
+  .paragraph-title .paragraph-text { font-size: clamp(1.7rem, 9vw, 2.5rem); }
+  .paragraph-heading .paragraph-text { font-size: 1.14rem; }
+  .page-marker { margin: 30px 0 28px; }
   .translation-block { margin-top: 10px; }
   .study-modal { left: 0; right: 0; top: auto; bottom: 0; width: auto; max-height: 72vh; padding: 18px 18px 104px; border-radius: 24px 24px 0 0; transform: none; }
   .mobile-fab { right: 12px; bottom: calc(var(--rf-status-height, 48px) + env(safe-area-inset-bottom) + 12px); padding: 10px 13px; font-size: .88rem; }

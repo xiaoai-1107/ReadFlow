@@ -6,6 +6,8 @@ export type TranslationStatus = 'idle' | 'translating' | 'translated' | 'failed'
 
 export type TranslationSource = 'provider' | 'fallback' | 'mock' | 'none'
 
+export type ParagraphLayoutRole = 'body' | 'title' | 'heading' | 'toc' | 'list' | 'copyright'
+
 export type TranslationErrorCode =
   | 'provider_not_configured'
   | 'offline'
@@ -29,6 +31,7 @@ export interface ParagraphUnit {
   anchorKey: string
   order: number
   pageIndex: number
+  layoutRole?: ParagraphLayoutRole
   text: string
   textHash: string
   sentences: SentenceUnit[]

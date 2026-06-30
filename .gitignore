@@ -1,0 +1,8 @@
+.env
+.env.*
+!.env.example
+dist/
+playwright-report/
+test-results/
+vite-dev.log
+vite-dev.err.log
