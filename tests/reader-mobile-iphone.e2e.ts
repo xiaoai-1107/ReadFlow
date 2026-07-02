@@ -23,6 +23,12 @@ test.describe('reader mobile interactions (iphone-13)', () => {
 
       await clickAndWait(page, page.getByTestId('mobile-primary-action'))
       await expect(page.getByTestId('action-sheet')).toBeVisible()
+      await page.getByTestId('mobile-search-box').locator('input').fill('mobile scrolling')
+      await page.getByTestId('mobile-search-box').locator('input').press('Enter')
+      await expect(page.getByTestId('action-sheet')).toHaveCount(0)
+
+      await clickAndWait(page, page.getByTestId('mobile-primary-action'))
+      await expect(page.getByTestId('action-sheet')).toBeVisible()
       await clickAndWait(page, page.getByTestId('open-structure-drawer'))
       await expect(page.getByTestId('structure-drawer')).toBeVisible()
       await page.getByTestId('structure-drawer-backdrop').click({ position: { x: 40, y: 100 } })
@@ -34,6 +40,15 @@ test.describe('reader mobile interactions (iphone-13)', () => {
       await page.screenshot({ path: 'test-results/iphone-13-sentence-selected.png', fullPage: false })
 
       expect(await sentence.getAttribute('data-selected')).toBe('true')
+
+      await clickAndWait(page, page.getByTestId('create-note-action'))
+      await expect(page.getByTestId('sentence-card')).toHaveCount(0)
+      await clickAndWait(page, page.getByTestId('mobile-primary-action'))
+      await clickAndWait(page, page.getByTestId('open-notes-panel'))
+      await expect(page.getByTestId('study-panel')).toBeVisible()
+      await expect(page.getByTestId('study-panel').getByTestId('note-card')).toHaveCount(1)
+      await clickAndWait(page, page.getByTestId('hide-notes-panel'))
+      await expect(page.getByTestId('study-panel')).toHaveCount(0)
 
       await page.mouse.wheel(0, 1400)
       await page.waitForTimeout(300)

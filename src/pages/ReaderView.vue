@@ -70,8 +70,8 @@
           </div>
 
           <div class="toolbar-group end">
-            <button class="ghost-button" type="button" @click="notePanelVisible = !notePanelVisible">
-              {{ notePanelVisible ? '隐藏笔记' : '显示笔记' }}
+            <button class="ghost-button" type="button" data-testid="toggle-notes-panel" @click="notePanelVisible = !notePanelVisible">
+              {{ notePanelVisible ? t('hideNotes') : t('showNotes') }}
             </button>
             <div class="lang-switch" :aria-label="t('languageSwitchLabel')">
               <button :class="['lang-button', { active: uiLanguage === 'zh-CN' }]" @click.stop="setUiLanguage('zh-CN')">{{ t('uiChinese') }}</button>
@@ -352,15 +352,15 @@
         </div>
 
         <div class="sentence-card-actions">
-          <button class="chip-button subtle-chip" @click="createNoteFromSelection">
-            加入笔记
+          <button class="chip-button subtle-chip" data-testid="create-note-action" @click="createNoteFromSelection">
+            {{ t('addToNotes') }}
           </button>
-          <button class="chip-button subtle-chip" @click="toggleSelectedSentenceHighlight">
+          <button class="chip-button subtle-chip" data-testid="toggle-sentence-highlight" @click="toggleSelectedSentenceHighlight">
             {{ t('highlightAction') }}
           </button>
-          <button class="chip-button subtle-chip" @click="copySelectedSentence">{{ t('copy') }}</button>
-          <button class="chip-button subtle-chip" @click="openTagEditorFromSelection">
-            标签
+          <button class="chip-button subtle-chip" data-testid="copy-sentence-action" @click="copySelectedSentence">{{ t('copy') }}</button>
+          <button class="chip-button subtle-chip" data-testid="open-tag-editor-action" @click="openTagEditorFromSelection">
+            {{ t('tags') }}
           </button>
         </div>
 
@@ -411,6 +411,10 @@
             <button @click="closeMobileActionSheet">{{ t('close') }}</button>
           </div>
           <p class="muted action-sheet-copy">{{ t('readerToolsCopy') }}</p>
+          <form class="search-box mobile-search-box" data-testid="mobile-search-box" @submit.prevent="handleSearch">
+            <input v-model="searchQuery" type="search" :placeholder="t('searchParagraphs')" />
+            <button class="chip-button subtle-chip" type="submit">{{ t('searchAction') }}</button>
+          </form>
           <div class="mobile-action-grid">
             <button class="mobile-action-card" data-testid="open-structure-drawer" @click="openStructureDrawerFromActions">
               <span class="mobile-action-title">{{ t('structure') }}</span>
@@ -419,6 +423,10 @@
             <button class="mobile-action-card" data-testid="open-study-panel" @click="openStudyPanelFromActions">
               <span class="mobile-action-title">{{ t('myStudy') }}</span>
               <span class="mobile-action-meta">{{ t('readerToolsStudyMeta') }}</span>
+            </button>
+            <button class="mobile-action-card" data-testid="open-notes-panel" @click="openNotesPanelFromActions">
+              <span class="mobile-action-title">{{ t('showNotes') }}</span>
+              <span class="mobile-action-meta">{{ t('readerToolsNotesMeta') }}</span>
             </button>
             <button class="mobile-action-card" data-testid="open-details-sheet" @click="openMobileDetailsFromActions">
               <span class="mobile-action-title">{{ t('details') }}</span>
@@ -542,12 +550,15 @@
       <div v-if="showStudyPanel" class="overlay" data-testid="study-panel-backdrop" @click="closeStudyPanel">
         <section :class="[isMobile ? 'sheet' : 'study-modal']" data-testid="study-panel" @click.stop>
           <div class="sheet-head">
-            <h3>{{ t('myStudy') }}</h3>
-            <button @click="closeStudyPanel">{{ t('close') }}</button>
+            <h3>{{ studyView === 'notes' ? t('notes') : t('myStudy') }}</h3>
+            <button :data-testid="isMobile && studyView === 'notes' ? 'hide-notes-panel' : 'study-panel-close'" @click="closeStudyPanel">
+              {{ isMobile && studyView === 'notes' ? t('hideNotes') : t('close') }}
+            </button>
           </div>
           <div class="study-tabs">
             <button :class="['study-tab', { active: studyView === 'highlights' }]" @click="openStudyPanel('highlights')">{{ t('highlights') }}</button>
             <button :class="['study-tab', { active: studyView === 'tags' }]" @click="openTagReview()">{{ t('tags') }}</button>
+            <button :class="['study-tab', { active: studyView === 'notes' }]" @click="openStudyPanel('notes')">{{ t('notes') }}</button>
             <button :class="['study-tab', { active: studyView === 'recent' }]" @click="openStudyPanel('recent')">{{ t('recentlyRead') }}</button>
             <button :class="['study-tab', { active: studyView === 'vocab' }]" @click="openStudyPanel('vocab')">{{ t('vocab') }}</button>
           </div>
@@ -604,6 +615,23 @@
             <div v-if="activeReviewTag" class="chip-row top-gap">
               <button class="chip-button subtle-chip" @click="exportHighlights('markdown', activeReviewTag.id)">{{ t('exportAsMarkdown') }}</button>
               <button class="chip-button subtle-chip" @click="exportHighlights('txt', activeReviewTag.id)">{{ t('exportAsTxt') }}</button>
+            </div>
+          </section>
+          <section v-else-if="studyView === 'notes'" class="panel compact-panel">
+            <div class="panel-label">{{ t('notes') }}</div>
+            <p class="muted">{{ t('notesReviewBody') }}</p>
+            <div class="note-review-list top-gap">
+              <NoteCard
+                v-for="note in noteStore.sortedNotes"
+                :key="note.id"
+                :note="note"
+                :tags="tagsForNote(note)"
+                @save="payload => saveNote(note, payload)"
+                @add-tag="name => addTagToNote(note, name)"
+                @remove-tag="tagId => removeTagFromNote(note, tagId)"
+                @delete="deleteNote(note)"
+              />
+              <p v-if="noteStore.sortedNotes.length === 0" class="muted small">{{ t('notesEmpty') }}</p>
             </div>
           </section>
           <section v-else-if="studyView === 'vocab'" class="panel compact-panel">
@@ -721,7 +749,7 @@ interface SelectionRect {
   height: number
 }
 
-type StudyView = 'highlights' | 'tags' | 'recent' | 'vocab'
+type StudyView = 'highlights' | 'tags' | 'notes' | 'recent' | 'vocab'
 
 const route = useRoute()
 const router = useRouter()
@@ -1635,6 +1663,9 @@ function handleSearch() {
   }
 
   void readerStore.setCurrentParagraph(target.id)
+  if (isMobile.value) {
+    closeMobilePanels()
+  }
   scrollToParagraph(target.id, 'smooth', 'search')
   pushToast(t('jumpedToParagraph', { paragraph: target.order + 1 }), 'info')
 }
@@ -1864,6 +1895,10 @@ function openStructureDrawerFromActions() {
 
 function openStudyPanelFromActions() {
   openStudyPanel('highlights')
+}
+
+function openNotesPanelFromActions() {
+  openStudyPanel('notes')
 }
 
 function openMobileDetailsFromActions() {
@@ -2380,6 +2415,8 @@ onBeforeUnmount(() => {
 .title.mobile { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: .98rem; }
 .search-box input, .tag-editor input { padding: 10px 12px; border: 1px solid var(--rf-border-strong); border-radius: 14px; background: var(--rf-input-bg); color: var(--rf-text); }
 .search-box input { width: min(320px, 28vw); border-radius: 999px; }
+.mobile-search-box { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; margin-bottom: 12px; }
+.mobile-search-box input { width: 100%; }
 .menu { position: absolute; top: calc(100% + 8px); right: 0; z-index: 24; display: flex; flex-direction: column; gap: 6px; min-width: 180px; padding: 8px; border: 1px solid var(--rf-border-strong); border-radius: 18px; background: var(--rf-surface-raised); box-shadow: var(--rf-shadow); }
 .menu button { text-align: left; }
 .banner { display: flex; justify-content: space-between; gap: 12px; margin-top: 12px; padding: 10px 14px; border-radius: 16px; background: var(--rf-primary-soft); color: var(--rf-primary); }
@@ -2517,6 +2554,7 @@ onBeforeUnmount(() => {
 .compact-editor input { flex: 1; min-width: 0; }
 .subtle-chip { background: var(--rf-surface-strong); }
 .tag-review-groups, .tag-review-list { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
+.note-review-list { display: flex; flex-direction: column; gap: 10px; margin-top: 12px; }
 .tag-review-button, .tag-review-item { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; width: 100%; border: 1px solid var(--rf-border-strong); border-radius: 14px; background: var(--rf-surface-strong); color: var(--rf-text); padding: 10px 12px; text-align: left; }
 .tag-review-button:hover, .tag-review-item:hover { background: var(--rf-hover); }
 .tag-review-button.active { border-color: var(--rf-primary-border); background: var(--rf-selected); color: var(--rf-primary); }

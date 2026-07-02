@@ -157,7 +157,12 @@ export async function getAnnotationBundle(documentId: string): Promise<Annotatio
 
 export async function saveAnnotationBundle(bundle: AnnotationBundle): Promise<void> {
   await stores.annotations.setItem(bundle.documentId, {
-    ...bundle,
+    documentId: bundle.documentId,
+    highlights: bundle.highlights.map(highlight => ({ ...highlight })),
+    tags: bundle.tags.map(tag => ({
+      ...tag,
+      highlightIds: [...tag.highlightIds]
+    })),
     updatedAt: Date.now()
   })
 }
@@ -174,7 +179,8 @@ export async function getNoteBundle(documentId: string): Promise<NoteBundle> {
 
 export async function saveNoteBundle(bundle: NoteBundle): Promise<void> {
   await stores.notes.setItem(bundle.documentId, {
-    ...bundle,
+    documentId: bundle.documentId,
+    notes: bundle.notes.map(note => ({ ...note })),
     updatedAt: Date.now()
   })
 }
@@ -255,7 +261,10 @@ export async function getVocabBundle(): Promise<VocabBundle> {
 }
 
 export async function saveVocabBundle(bundle: Omit<VocabBundle, 'updatedAt'>): Promise<void> {
-  await stores.vocab.setItem(VOCAB_KEY, { ...bundle, updatedAt: Date.now() })
+  await stores.vocab.setItem(VOCAB_KEY, {
+    entries: bundle.entries.map(entry => ({ ...entry })),
+    updatedAt: Date.now()
+  })
 }
 
 export async function removeVocabEntry(id: string): Promise<void> {

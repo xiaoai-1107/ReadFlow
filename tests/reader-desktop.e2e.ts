@@ -3,6 +3,8 @@ import { clickAndWait, clickByBoxCenterInSteps, firstVisibleSentence, getReaderD
 
 test.describe('reader desktop interactions', () => {
   test('A/C/F: desktop reader remains interactive and does not freeze after repeated controls', async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== 'desktop-edge', 'Desktop reader coverage only runs in the desktop project.')
+
     const consoleErrors: string[] = []
     page.on('pageerror', error => {
       consoleErrors.push(error.message)
