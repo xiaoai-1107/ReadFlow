@@ -2,6 +2,8 @@ import localforage from 'localforage'
 import type {
   AnnotationBundle,
   AppDocumentMeta,
+  NoteBundle,
+  NoteRecord,
   ParsedDocumentCache,
   ReaderSession,
   SentenceTranslationRecord,
@@ -21,6 +23,7 @@ export const stores = {
   translations: localforage.createInstance({ name: DB_NAME, storeName: 'translations' }),
   sentenceTranslations: localforage.createInstance({ name: DB_NAME, storeName: 'sentence-translations' }),
   annotations: localforage.createInstance({ name: DB_NAME, storeName: 'annotations' }),
+  notes: localforage.createInstance({ name: DB_NAME, storeName: 'notes' }),
   sessions: localforage.createInstance({ name: DB_NAME, storeName: 'sessions' }),
   settings: localforage.createInstance({ name: DB_NAME, storeName: 'settings' }),
   wordLookups: localforage.createInstance({ name: DB_NAME, storeName: 'word-lookups' }),
@@ -159,6 +162,48 @@ export async function saveAnnotationBundle(bundle: AnnotationBundle): Promise<vo
   })
 }
 
+export async function getNoteBundle(documentId: string): Promise<NoteBundle> {
+  return (
+    (await stores.notes.getItem<NoteBundle>(documentId)) ?? {
+      documentId,
+      notes: [],
+      updatedAt: Date.now()
+    }
+  )
+}
+
+export async function saveNoteBundle(bundle: NoteBundle): Promise<void> {
+  await stores.notes.setItem(bundle.documentId, {
+    ...bundle,
+    updatedAt: Date.now()
+  })
+}
+
+export async function saveNoteRecord(record: NoteRecord): Promise<void> {
+  const bundle = await getNoteBundle(record.documentId)
+  const noteIndex = bundle.notes.findIndex(note => note.id === record.id)
+  const nextRecord = {
+    ...record,
+    updatedAt: Date.now()
+  }
+
+  if (noteIndex >= 0) {
+    bundle.notes[noteIndex] = nextRecord
+  } else {
+    bundle.notes.push(nextRecord)
+  }
+
+  await saveNoteBundle(bundle)
+}
+
+export async function deleteNoteRecord(documentId: string, noteId: string): Promise<void> {
+  const bundle = await getNoteBundle(documentId)
+  await saveNoteBundle({
+    ...bundle,
+    notes: bundle.notes.filter(note => note.id !== noteId)
+  })
+}
+
 export async function getReaderSession(documentId: string): Promise<ReaderSession | null> {
   return stores.sessions.getItem<ReaderSession>(documentId)
 }
@@ -184,6 +229,7 @@ export async function deleteDocument(id: string): Promise<void> {
     stores.translations.removeItem(id),
     stores.sentenceTranslations.removeItem(id),
     stores.annotations.removeItem(id),
+    stores.notes.removeItem(id),
     stores.sessions.removeItem(id),
     stores.wordLookups.removeItem(id)
   ])

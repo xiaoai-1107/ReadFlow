@@ -121,6 +121,33 @@ export interface TagRecord {
   createdAt: number
 }
 
+export interface NoteRecord {
+  id: string
+  documentId: string
+  documentTitle: string
+  paragraphId: string
+  paragraphAnchorKey: string
+  paragraphOrder: number
+  sentenceId: string
+  sentenceAnchorKey: string
+  sentenceIndex: number
+  pageIndex: number
+  highlightId: string | null
+  originalText: string
+  originalTextHash: string
+  translationText: string
+  translationUpdatedAt: number | null
+  userNote: string
+  createdAt: number
+  updatedAt: number
+}
+
+export interface NoteBundle {
+  documentId: string
+  notes: NoteRecord[]
+  updatedAt: number
+}
+
 export interface AnnotationBundle {
   documentId: string
   highlights: HighlightRecord[]

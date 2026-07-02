@@ -70,6 +70,9 @@
           </div>
 
           <div class="toolbar-group end">
+            <button class="ghost-button" type="button" @click="notePanelVisible = !notePanelVisible">
+              {{ notePanelVisible ? '隐藏笔记' : '显示笔记' }}
+            </button>
             <div class="lang-switch" :aria-label="t('languageSwitchLabel')">
               <button :class="['lang-button', { active: uiLanguage === 'zh-CN' }]" @click.stop="setUiLanguage('zh-CN')">{{ t('uiChinese') }}</button>
               <button :class="['lang-button', { active: uiLanguage === 'en' }]" @click.stop="setUiLanguage('en')">{{ t('uiEnglish') }}</button>
@@ -151,7 +154,7 @@
         </aside>
 
         <main ref="contentRef" :class="['content', { mobile: isMobile }]" data-testid="reader-content">
-          <div class="book-page">
+          <div :class="['book-page', { 'notes-hidden': !notePanelVisible }]">
             <template v-for="(paragraph, paragraphIndex) in paragraphs" :key="paragraph.id">
               <article
                 :id="paragraph.id"
@@ -215,6 +218,18 @@
                       <span>{{ translationFor(paragraph.id)?.status === 'translating' ? t('translationLoadingCurrent') : t('translationLoadingAround') }}</span>
                     </div>
                   </div>
+                </div>
+                <div v-if="notePanelVisible" class="paragraph-notes" aria-label="学习笔记">
+                  <NoteCard
+                    v-for="note in notesForParagraph(paragraph.id)"
+                    :key="note.id"
+                    :note="note"
+                    :tags="tagsForNote(note)"
+                    @save="payload => saveNote(note, payload)"
+                    @add-tag="name => addTagToNote(note, name)"
+                    @remove-tag="tagId => removeTagFromNote(note, tagId)"
+                    @delete="deleteNote(note)"
+                  />
                 </div>
               </article>
 
@@ -357,6 +372,9 @@
         <div class="sentence-card-actions">
           <button class="chip-button subtle-chip" @click="toggleSelectedSentenceHighlight">
             {{ selectedSentenceHighlighted ? t('removeHighlightAction') : t('highlightAction') }}
+          </button>
+          <button class="chip-button subtle-chip" @click="createNoteFromSelection">
+            加入笔记
           </button>
           <button class="chip-button subtle-chip" @click="openTagEditorFromSelection">
             {{ t('editTags') }}
@@ -694,11 +712,13 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch, type ComponentPublicInstance } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useWindowScroll, useWindowSize } from '@vueuse/core'
-import type { HighlightRecord, ParagraphUnit, ReaderMode, SentenceTranslationRecord, SentenceUnit, TagRecord, TranslationRecord, UiLanguage, WordLookupRecord } from '../domain/types'
+import NoteCard from '../components/NoteCard.vue'
+import type { HighlightRecord, NoteRecord, ParagraphUnit, ReaderMode, SentenceTranslationRecord, SentenceUnit, TagRecord, TranslationRecord, UiLanguage, WordLookupRecord } from '../domain/types'
 import { deleteDocument } from '../services/storage'
 import { usePreferencesStore } from '../stores/preferences'
 import { getReaderCopy, getTranslationErrorCopy, localizeReaderLoadError } from '../utils/readerUi'
 import { HIGHLIGHT_COLOR_OPTIONS, useHighlightStore } from '../stores/highlight'
+import { useNoteStore } from '../stores/notes'
 import { useReaderStore } from '../stores/reader'
 import { useWordLookupStore } from '../stores/wordLookup'
 import { useVocabStore } from '../stores/vocab'
@@ -766,6 +786,7 @@ const route = useRoute()
 const router = useRouter()
 const readerStore = useReaderStore()
 const highlightStore = useHighlightStore()
+const noteStore = useNoteStore()
 const preferencesStore = usePreferencesStore()
 const wordLookupStore = useWordLookupStore()
 const vocabStore = useVocabStore()
@@ -783,6 +804,7 @@ const showMobileActionSheet = ref(false)
 const showStructureDrawer = ref(false)
 const showMobileDetails = ref(false)
 const showRestoreBanner = ref(false)
+const notePanelVisible = ref(true)
 const restoreBannerParagraph = ref<number | null>(null)
 const online = ref(window.navigator.onLine)
 const { x: windowScrollX, y: windowScrollY } = useWindowScroll()
@@ -956,6 +978,15 @@ const currentParagraphHighlighted = computed(() =>
 const currentParagraphHighlightRecord = computed<HighlightRecord | null>(() =>
   currentParagraph.value ? highlightStore.findHighlight(currentParagraph.value.id) : null
 )
+const notesByParagraphId = computed(() => {
+  const map = new Map<string, NoteRecord[]>()
+  for (const note of noteStore.sortedNotes) {
+    const notes = map.get(note.paragraphId) ?? []
+    notes.push(note)
+    map.set(note.paragraphId, notes)
+  }
+  return map
+})
 const selectedSentenceId = computed(() => sentenceSelection.value?.sentence.id ?? null)
 const selectedParagraphId = computed(() => sentenceSelection.value?.paragraphId ?? null)
 const selectedSentenceHighlighted = computed(() =>
@@ -1590,6 +1621,7 @@ function resetSelection() {
 async function loadReader() {
   await readerStore.loadDocument(documentId.value)
   await highlightStore.loadForDocument(documentId.value)
+  await noteStore.loadForDocument(documentId.value)
   await wordLookupStore.loadForDocument(documentId.value)
   await vocabStore.load()
   await nextTick()
@@ -1770,6 +1802,14 @@ function sentenceHighlightStyle(sentenceId: string) {
   return highlight ? { '--sentence-highlight-color': highlight.color } : {}
 }
 
+function notesForParagraph(paragraphId: string) {
+  return notesByParagraphId.value.get(paragraphId) ?? []
+}
+
+function tagsForNote(note: NoteRecord) {
+  return note.highlightId ? highlightStore.tagsForHighlight(note.highlightId) : []
+}
+
 function setMode(nextMode: ReaderMode) {
   pushReaderDebugEvent('toolbar:set-mode', { nextMode, previousMode: mode.value })
   readerStore.setMode(nextMode)
@@ -1798,6 +1838,78 @@ function toggleSelectedSentenceHighlight() {
   if (isMobile.value) {
     resetSelection()
   }
+}
+
+async function createNoteFromSelection() {
+  if (!sentenceSelection.value) {
+    return
+  }
+
+  const paragraph = paragraphs.value.find(item => item.id === sentenceSelection.value?.paragraphId)
+  if (!paragraph) {
+    return
+  }
+
+  const sentence = sentenceSelection.value.sentence
+  const highlight = highlightStore.ensureSentenceHighlight(
+    documentId.value,
+    paragraph.id,
+    sentence.id,
+    sentence.text
+  )
+  const translation = readerStore.sentenceTranslationFor(sentence.id) ?? await readerStore.ensureSentenceTranslation(sentence.id)
+
+  await noteStore.createForSentence({
+    documentId: documentId.value,
+    documentTitle: documentTitle.value,
+    paragraph,
+    sentence,
+    highlightId: highlight?.id ?? null,
+    translation
+  })
+
+  pushToast('已加入学习笔记。', 'success')
+  if (isMobile.value) {
+    resetSelection()
+  }
+}
+
+async function saveNote(note: NoteRecord, payload: { translationText: string; userNote: string }) {
+  if (note.translationText === payload.translationText && note.userNote === payload.userNote) {
+    return
+  }
+
+  await noteStore.updateNote(note.id, payload)
+  pushToast('笔记已保存。', 'success')
+}
+
+function addTagToNote(note: NoteRecord, name: string) {
+  if (!note.highlightId) {
+    return
+  }
+
+  highlightStore.addTag(documentId.value, name, note.highlightId)
+}
+
+function removeTagFromNote(note: NoteRecord, tagId: string) {
+  if (!note.highlightId) {
+    return
+  }
+
+  highlightStore.detachTagFromHighlight(documentId.value, note.highlightId, tagId)
+}
+
+async function deleteNote(note: NoteRecord) {
+  const deleted = await noteStore.deleteNote(note.id)
+  if (!deleted) {
+    return
+  }
+
+  if (deleted.highlightId && highlightStore.tagsForHighlight(deleted.highlightId).length === 0) {
+    highlightStore.removeHighlight(documentId.value, deleted.highlightId)
+  }
+
+  pushToast('笔记已删除。', 'info')
 }
 
 function toggleParagraphHighlight() {
@@ -2472,22 +2584,25 @@ onBeforeUnmount(() => {
 .structure-item.active { border-color: var(--rf-primary-border); background: var(--rf-selected); }
 .structure-index { color: var(--rf-text); font-size: .86rem; font-weight: 600; }
 .structure-meta { color: var(--rf-text-muted); font-size: .82rem; line-height: 1.45; }
-.content { display: flex; justify-content: center; min-width: 0; min-height: 0; overflow: visible; overscroll-behavior: auto; -webkit-overflow-scrolling: touch; padding: 28px clamp(16px, 3vw, 42px) 140px; border: none; border-radius: 28px; background: #151515; box-shadow: none; }
-.book-page { width: min(100%, 860px); min-height: calc(var(--rf-reader-viewport-height, 100dvh) - 220px); padding: clamp(48px, 6vw, 72px) clamp(64px, 7vw, 96px); border: 1px solid var(--rf-border-strong); border-radius: 18px; background: #1e1e1e; box-shadow: 0 22px 60px rgba(0, 0, 0, .38); }
+.content { display: flex; justify-content: stretch; min-width: 0; min-height: 0; overflow: visible; overscroll-behavior: auto; -webkit-overflow-scrolling: touch; padding: 12px 8px 140px; border: none; border-radius: 28px; background: #151515; box-shadow: none; }
+.book-page { width: 100%; min-height: calc(var(--rf-reader-viewport-height, 100dvh) - 220px); padding: clamp(28px, 3vw, 46px) clamp(16px, 2.2vw, 34px); border: 1px solid var(--rf-border-strong); border-radius: 18px; background: #1e1e1e; box-shadow: 0 22px 60px rgba(0, 0, 0, .38); }
 .content.mobile { min-height: 0; overflow: visible; overscroll-behavior: auto; padding: 10px 10px calc(var(--rf-mobile-bottom-offset, 156px) + env(safe-area-inset-bottom)); border: none; border-radius: 0; background: transparent; box-shadow: none; }
 .content.mobile .book-page { width: 100%; min-height: auto; padding: 34px 22px 44px; border-radius: 16px; }
-.paragraph { position: relative; display: grid; grid-template-columns: 42px minmax(0, 1fr); gap: 18px; min-width: 0; padding: 0; border-bottom: none; scroll-margin-top: calc(var(--rf-toolbar-height, 88px) + 22px); scroll-margin-bottom: calc(var(--rf-status-height, 56px) + 18px); }
+.paragraph { position: relative; display: grid; grid-template-columns: 28px minmax(0, 1fr) minmax(220px, 280px); gap: 18px 18px; min-width: 0; padding: 0; border-bottom: none; scroll-margin-top: calc(var(--rf-toolbar-height, 88px) + 22px); scroll-margin-bottom: calc(var(--rf-status-height, 56px) + 18px); }
+.book-page.notes-hidden .paragraph { grid-template-columns: 28px minmax(0, 1fr); }
 .paragraph + .paragraph { margin-top: 1.2em; }
 .paragraph.current, .paragraph.highlighted { border-radius: 8px; background: rgba(76, 141, 255, .045); }
 .paragraph.highlighted { background: var(--rf-highlight); }
-.paragraph.current::before, .paragraph.highlighted::before { content: ''; position: absolute; left: 50px; top: .22em; bottom: .22em; width: 2px; border-radius: 999px; }
+.paragraph.current::before, .paragraph.highlighted::before { content: ''; position: absolute; left: 36px; top: .22em; bottom: .22em; width: 2px; border-radius: 999px; }
 .paragraph.current::before { background: var(--rf-primary); }
 .paragraph.highlighted::before { background: var(--rf-highlight-strong); }
 .paragraph.current.highlighted::before { background: var(--rf-primary); }
 .paragraph-index { padding-top: .42em; color: var(--rf-text-weak); font-family: "Segoe UI", "PingFang SC", sans-serif; font-size: .72rem; line-height: 1; text-align: right; opacity: 0; transition: opacity .16s ease; user-select: none; }
 .paragraph:hover .paragraph-index, .paragraph.current .paragraph-index, .paragraph.highlighted .paragraph-index { opacity: .68; }
-.paragraph-body { min-width: 0; padding-left: 10px; }
+.paragraph-body { min-width: 0; padding-left: 6px; }
 .paragraph-text, .translation-text { margin: 0; max-width: 100%; font-family: Georgia, "Times New Roman", Times, serif; font-size: 18px; line-height: 1.76; color: #e7e3dc; overflow-wrap: anywhere; word-break: normal; }
+.paragraph-notes { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.paragraph-notes:empty { min-height: 1px; }
 .translation-block { margin-top: .8em; max-width: 100%; }
 .translation-text { color: var(--rf-text-muted); }
 .translation-text { font-family: "Noto Serif SC", "Source Han Serif SC", "Songti SC", Georgia, serif; font-size: 17px; line-height: 1.78; }
@@ -2497,6 +2612,7 @@ onBeforeUnmount(() => {
 .paragraph-title { display: block; margin: 0 0 2.1em; text-align: center; }
 .paragraph-title .paragraph-index, .paragraph-heading .paragraph-index, .paragraph-copyright .paragraph-index { display: none; }
 .paragraph-title .paragraph-body, .paragraph-heading .paragraph-body, .paragraph-copyright .paragraph-body { padding-left: 0; }
+.paragraph-title .paragraph-notes, .paragraph-heading .paragraph-notes, .paragraph-copyright .paragraph-notes, .paragraph-toc .paragraph-notes, .paragraph-list .paragraph-notes { display: none; }
 .paragraph-title .paragraph-text { font-family: Georgia, "Times New Roman", Times, serif; font-size: clamp(2rem, 4vw, 3.2rem); line-height: 1.18; font-weight: 700; color: var(--rf-text); }
 .paragraph-heading { display: block; margin: 2.2em 0 1em; }
 .paragraph-heading .paragraph-text { font-family: "Segoe UI", "PingFang SC", sans-serif; font-size: 1.28rem; line-height: 1.35; font-weight: 700; color: var(--rf-text); }
@@ -2705,6 +2821,7 @@ onBeforeUnmount(() => {
   .paragraph + .paragraph { margin-top: 1.08em; }
   .paragraph.current::before, .paragraph.highlighted::before { left: 35px; top: .2em; bottom: .2em; }
   .paragraph-body { padding-left: 6px; }
+  .paragraph-notes { display: none; }
   .paragraph-text, .translation-text { max-width: none; font-size: 17px; line-height: 1.76; }
   .paragraph-title .paragraph-text { font-size: clamp(1.7rem, 9vw, 2.5rem); }
   .paragraph-heading .paragraph-text { font-size: 1.14rem; }
