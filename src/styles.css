@@ -26,8 +26,8 @@
   --rf-primary-hover: #6aa1ff;
   --rf-primary-soft: rgba(76, 141, 255, 0.16);
   --rf-primary-border: rgba(76, 141, 255, 0.36);
-  --rf-highlight: rgba(214, 184, 90, 0.22);
-  --rf-highlight-strong: rgba(214, 184, 90, 0.34);
+  --rf-highlight: rgba(92, 172, 255, 0.5);
+  --rf-highlight-strong: rgba(92, 172, 255, 0.58);
   --rf-success: #72d18b;
   --rf-warning: #e6b450;
   --rf-danger: #ff6b6b;

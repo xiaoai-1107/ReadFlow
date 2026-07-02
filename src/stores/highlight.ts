@@ -2,7 +2,12 @@ import { defineStore } from 'pinia'
 import type { HighlightRecord, TagRecord } from '../domain/types'
 import { getAnnotationBundle, saveAnnotationBundle } from '../services/storage'
 
-export const HIGHLIGHT_COLOR_OPTIONS = ['#f3e7a0', '#cfe5ff', '#d9f4d7', '#f8d6df'] as const
+export const HIGHLIGHT_COLOR_OPTIONS = [
+  'rgba(92, 172, 255, 0.5)',
+  'rgba(255, 126, 176, 0.5)',
+  'rgba(255, 210, 92, 0.5)',
+  'rgba(95, 224, 164, 0.5)'
+] as const
 
 const DEFAULT_HIGHLIGHT_COLOR = HIGHLIGHT_COLOR_OPTIONS[0]
 const DEFAULT_TAG_COLOR = '#dbeafe'

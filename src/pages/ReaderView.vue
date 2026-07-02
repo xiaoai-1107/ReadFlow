@@ -330,10 +330,7 @@
 
       <div v-if="sentenceSelection" class="sentence-card" data-testid="sentence-card" :style="sentenceSelectionStyle" @click.stop>
         <div class="sentence-card-head">
-          <div>
-            <p class="panel-label">{{ selectedSentenceLabel }}</p>
-            <h3 class="sentence-card-title">{{ selectedParagraphLabel }}</h3>
-          </div>
+          <p class="sentence-card-meta">{{ selectedParagraphLabel }}</p>
           <button class="sentence-card-close" @click="resetSelection">{{ t('close') }}</button>
         </div>
 
@@ -343,24 +340,9 @@
           </button>
         </div>
 
-        <div class="sentence-card-section">
-          <div class="sentence-card-label">{{ t('sentenceCardOriginal') }}</div>
-          <p class="sentence-card-text">
-            <template v-for="token in selectedSentenceTokens" :key="token.id">
-              <button
-                v-if="token.kind === 'word' && token.normalized"
-                :class="['word-token', { active: token.normalized === activeWord }]"
-                @click.stop="selectWord(token.normalized)"
-              >
-                {{ token.text }}
-              </button>
-              <span v-else class="word-separator">{{ token.text }}</span>
-            </template>
-          </p>
-        </div>
+        <p class="sentence-card-text">{{ selectedSentenceSourceText }}</p>
 
-        <div class="sentence-card-section">
-          <div class="sentence-card-label">{{ t('sentenceCardTranslation') }}</div>
+        <div class="sentence-card-translation">
           <p v-if="selectedSentenceMeaning" class="sentence-card-meaning">{{ selectedSentenceMeaning }}</p>
           <template v-else-if="selectedSentenceTranslation?.status === 'failed' && canRetryTranslation(selectedSentenceTranslation)">
             <p class="muted small">{{ translationErrorText(selectedSentenceTranslation) }}</p>
@@ -370,20 +352,19 @@
         </div>
 
         <div class="sentence-card-actions">
-          <button class="chip-button subtle-chip" @click="toggleSelectedSentenceHighlight">
-            {{ selectedSentenceHighlighted ? t('removeHighlightAction') : t('highlightAction') }}
-          </button>
           <button class="chip-button subtle-chip" @click="createNoteFromSelection">
             加入笔记
           </button>
-          <button class="chip-button subtle-chip" @click="openTagEditorFromSelection">
-            {{ t('editTags') }}
+          <button class="chip-button subtle-chip" @click="toggleSelectedSentenceHighlight">
+            {{ t('highlightAction') }}
           </button>
           <button class="chip-button subtle-chip" @click="copySelectedSentence">{{ t('copy') }}</button>
+          <button class="chip-button subtle-chip" @click="openTagEditorFromSelection">
+            标签
+          </button>
         </div>
 
-        <div class="sentence-card-section">
-          <div class="sentence-card-label">{{ t('highlightColors') }}</div>
+        <div v-if="showHighlightColorPanel" class="sentence-card-section">
           <div class="color-swatches">
             <button
               v-for="color in highlightColorOptions"
@@ -395,8 +376,7 @@
           </div>
         </div>
 
-        <div class="sentence-card-section tag-editor-panel">
-          <div class="sentence-card-label">{{ t('existingTags') }}</div>
+        <div v-if="showTagEditor" class="sentence-card-section tag-editor-panel">
           <div class="chip-row">
             <button
               v-for="tag in highlightStore.tags"
@@ -411,42 +391,6 @@
           <div class="tag-editor compact-editor">
             <input v-model="tagInput" type="text" :placeholder="t('newTagOptional')" @keyup.enter="submitTagForCurrentTarget" />
             <button class="chip-button subtle-chip" @click="submitTagForCurrentTarget">{{ t('saveTag') }}</button>
-          </div>
-        </div>
-
-        <div v-if="activeWord" class="word-card">
-          <div class="word-card-head">
-            <strong>{{ activeWord }}</strong>
-            <div style="display: flex; gap: 6px;">
-              <button class="chip-button subtle-chip" @click="playSelectedWord">{{ t('playPronunciation') }}</button>
-              <button
-                :class="['chip-button', 'subtle-chip', { 'vocab-saved': isActiveWordInVocab }]"
-                @click="isActiveWordInVocab ? removeActiveWordFromVocab() : saveActiveWordToVocab()"
-              >
-                {{ isActiveWordInVocab ? t('removeFromVocab') : t('saveToVocab') }}
-              </button>
-            </div>
-          </div>
-          <div class="word-card-row">
-            <span class="word-card-label">{{ t('wordDefinition') }}</span>
-            <span class="word-card-value">
-              <template v-if="activeWordLookup?.status === 'loading'">
-                <span class="muted">{{ t('wordLookupLoading') }}</span>
-              </template>
-              <template v-else-if="activeWordDefinition">
-                {{ activeWordDefinition }}
-              </template>
-              <template v-else-if="activeWordLookup?.status === 'failed'">
-                <span class="muted small">{{ t('wordLookupFailed') }}</span>
-                <button class="chip-button subtle-chip" style="margin-left: 6px; padding: 4px 8px; font-size: .8rem;" @click="retryWordLookup">{{ t('retryWordLookup') }}</button>
-              </template>
-              <template v-else-if="!translationProviderConfigured">
-                <span class="muted small">{{ t('wordLookupUnavailable') }}</span>
-              </template>
-              <template v-else>
-                <span class="muted small">{{ activeWordMeaning }}</span>
-              </template>
-            </span>
           </div>
         </div>
       </div>
@@ -713,14 +657,13 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch, type Compon
 import { useRoute, useRouter } from 'vue-router'
 import { useWindowScroll, useWindowSize } from '@vueuse/core'
 import NoteCard from '../components/NoteCard.vue'
-import type { HighlightRecord, NoteRecord, ParagraphUnit, ReaderMode, SentenceTranslationRecord, SentenceUnit, TagRecord, TranslationRecord, UiLanguage, WordLookupRecord } from '../domain/types'
+import type { HighlightRecord, NoteRecord, ParagraphUnit, ReaderMode, SentenceTranslationRecord, SentenceUnit, TagRecord, TranslationRecord, UiLanguage } from '../domain/types'
 import { deleteDocument } from '../services/storage'
 import { usePreferencesStore } from '../stores/preferences'
 import { getReaderCopy, getTranslationErrorCopy, localizeReaderLoadError } from '../utils/readerUi'
 import { HIGHLIGHT_COLOR_OPTIONS, useHighlightStore } from '../stores/highlight'
 import { useNoteStore } from '../stores/notes'
 import { useReaderStore } from '../stores/reader'
-import { useWordLookupStore } from '../stores/wordLookup'
 import { useVocabStore } from '../stores/vocab'
 import {
   appendReaderDebugSample,
@@ -731,8 +674,6 @@ import {
 } from '../utils/debug'
 import {
   buildInteractionFragments,
-  tokenizeInlineWords,
-  type InlineWordToken,
   type InteractionFragment
 } from '../utils/readerInteractions'
 
@@ -788,7 +729,6 @@ const readerStore = useReaderStore()
 const highlightStore = useHighlightStore()
 const noteStore = useNoteStore()
 const preferencesStore = usePreferencesStore()
-const wordLookupStore = useWordLookupStore()
 const vocabStore = useVocabStore()
 
 const readerPageRef = ref<HTMLElement | null>(null)
@@ -817,7 +757,7 @@ const activeReviewTagId = ref<string | null>(null)
 const sentenceSelection = ref<SentenceCardSelection | null>(null)
 const selectionHighlightRects = ref<SelectionRect[]>([])
 const sentenceCardMode = ref<'fragment' | 'sentence'>('fragment')
-const activeWord = ref<string | null>(null)
+const showHighlightColorPanel = ref(false)
 const toasts = ref<ToastItem[]>([])
 const paragraphTrackingSuspendedUntil = ref(0)
 const mediaQuery = window.matchMedia('(max-width: 960px)')
@@ -989,9 +929,6 @@ const notesByParagraphId = computed(() => {
 })
 const selectedSentenceId = computed(() => sentenceSelection.value?.sentence.id ?? null)
 const selectedParagraphId = computed(() => sentenceSelection.value?.paragraphId ?? null)
-const selectedSentenceHighlighted = computed(() =>
-  selectedSentenceId.value ? Boolean(highlightStore.findHighlight(selectedSentenceId.value)) : false
-)
 const selectedSentenceHighlightRecord = computed<HighlightRecord | null>(() =>
   selectedSentenceId.value ? highlightStore.findHighlight(selectedSentenceId.value) : null
 )
@@ -1124,9 +1061,6 @@ const sentenceSelectionStyle = computed(() => {
     width: isMob ? `${cardWidth}px` : '380px'
   }
 })
-const selectedSentenceLabel = computed(() =>
-  sentenceSelection.value?.fragment.isWholeSentence ? t('fullSentence') : t('readingFragment')
-)
 const selectedSentenceSourceText = computed(() => {
   if (!sentenceSelection.value) {
     return ''
@@ -1138,9 +1072,6 @@ const selectedSentenceSourceText = computed(() => {
 
   return sentenceSelection.value.fragment.text
 })
-const selectedSentenceTokens = computed<InlineWordToken[]>(() =>
-  selectedSentenceSourceText.value ? tokenizeInlineWords(selectedSentenceSourceText.value) : []
-)
 const selectedSentenceTranslation = computed<SentenceTranslationRecord | null>(() =>
   selectedSentenceId.value ? readerStore.sentenceTranslationFor(selectedSentenceId.value) : null
 )
@@ -1176,27 +1107,6 @@ const selectedSentenceTranslationMessage = computed(() => {
 
   return t('translationWillBeCached')
 })
-const activeWordMeaning = computed(() => selectedSentenceMeaning.value || t('wordMeaningUnavailable'))
-
-const activeWordLookup = computed<WordLookupRecord | null>(() => {
-  if (!activeWord.value || !selectedSentenceId.value) {
-    return null
-  }
-  return wordLookupStore.getLookup(activeWord.value, selectedSentenceId.value)
-})
-
-const activeWordDefinition = computed(() => {
-  const record = activeWordLookup.value
-  if (!record) return ''
-  if (record.status === 'loaded' && record.definition) return record.definition
-  return ''
-})
-
-const isActiveWordInVocab = computed(() => {
-  if (!activeWord.value || !selectedSentenceId.value) return false
-  return vocabStore.isWordSaved(activeWord.value, selectedSentenceId.value)
-})
-
 const structureItems = computed<StructureItem[]>(() => {
   const groups = new Map<number, ParagraphUnit[]>()
 
@@ -1612,8 +1522,8 @@ function resetSelection() {
   sentenceSelection.value = null
   selectionHighlightRects.value = []
   sentenceCardMode.value = 'fragment'
-  activeWord.value = null
   showTagEditor.value = false
+  showHighlightColorPanel.value = false
   pushReaderDebugEvent('selection:reset')
   updateMobileLayoutMetrics('reset-selection')
 }
@@ -1622,7 +1532,6 @@ async function loadReader() {
   await readerStore.loadDocument(documentId.value)
   await highlightStore.loadForDocument(documentId.value)
   await noteStore.loadForDocument(documentId.value)
-  await wordLookupStore.loadForDocument(documentId.value)
   await vocabStore.load()
   await nextTick()
   updateMobileLayoutMetrics('load-reader-ready')
@@ -1751,8 +1660,8 @@ function selectSentenceFragment(
     y: Math.max(80, Math.round('clientY' in event ? event.clientY || 80 : 80))
   }
   sentenceCardMode.value = fragment.isWholeSentence ? 'sentence' : 'fragment'
-  activeWord.value = null
   showTagEditor.value = false
+  showHighlightColorPanel.value = false
   closeMobilePanels()
   pushReaderDebugEvent('sentence:select-fragment', {
     paragraphId: paragraph.id,
@@ -1773,7 +1682,6 @@ function toggleSentenceCardMode() {
   }
 
   sentenceCardMode.value = sentenceCardMode.value === 'sentence' ? 'fragment' : 'sentence'
-  activeWord.value = null
 }
 
 function isSentenceHighlighted(sentenceId: string) {
@@ -1824,19 +1732,15 @@ function toggleSelectedSentenceHighlight() {
     return
   }
 
-  const existed = Boolean(highlightStore.findHighlight(selectedSentenceId.value))
-  highlightStore.toggleSentenceHighlight(
+  highlightStore.ensureSentenceHighlight(
     documentId.value,
     selectedParagraphId.value,
     selectedSentenceId.value,
     sentenceSelection.value?.sentence.text ?? selectedSentenceSourceText.value
   )
-  if (existed) {
+  showHighlightColorPanel.value = !showHighlightColorPanel.value
+  if (showHighlightColorPanel.value) {
     showTagEditor.value = false
-  }
-
-  if (isMobile.value) {
-    resetSelection()
   }
 }
 
@@ -1941,7 +1845,10 @@ function applyParagraphHighlightColor(color: string) {
 
 function openTagEditorFromSelection() {
   closeMobilePanels()
-  showTagEditor.value = true
+  showTagEditor.value = !showTagEditor.value
+  if (showTagEditor.value) {
+    showHighlightColorPanel.value = false
+  }
   tagInput.value = ''
   updateMobileLayoutMetrics('open-tag-editor-from-selection')
 }
@@ -2065,54 +1972,6 @@ async function retrySentenceTranslation() {
   pushToast(t('sentenceTranslationRetried'), 'info')
 }
 
-async function retryWordLookup() {
-  if (!activeWord.value || !selectedSentenceId.value || !sentenceSelection.value) {
-    return
-  }
-
-  await wordLookupStore.lookup(
-    activeWord.value,
-    selectedSentenceId.value,
-    sentenceSelection.value.sentence.text,
-    true
-  )
-}
-
-async function saveActiveWordToVocab() {
-  if (!activeWord.value || !selectedSentenceId.value || !sentenceSelection.value) {
-    return
-  }
-
-  const paragraph = paragraphs.value.find(p => p.id === sentenceSelection.value?.paragraphId)
-  void paragraph
-  await vocabStore.addEntry({
-    word: activeWord.value,
-    definition: activeWordDefinition.value || activeWordMeaning.value || '',
-    exampleSentence: sentenceSelection.value.sentence.text,
-    documentId: documentId.value,
-    documentTitle: documentTitle.value,
-    paragraphId: sentenceSelection.value.paragraphId,
-    sentenceId: selectedSentenceId.value
-  })
-  pushToast(t('wordSavedToVocab'), 'success')
-}
-
-async function removeActiveWordFromVocab() {
-  if (!activeWord.value || !selectedSentenceId.value) {
-    return
-  }
-
-  const entry = vocabStore.entries.find(
-    e =>
-      e.word.toLowerCase() === activeWord.value!.toLowerCase() &&
-      e.sentenceId === selectedSentenceId.value
-  )
-  if (entry) {
-    await vocabStore.removeEntry(entry.id)
-    pushToast(t('wordRemovedFromVocab'), 'info')
-  }
-}
-
 async function removeVocabEntry(id: string) {
   await vocabStore.removeEntry(id)
 }
@@ -2213,26 +2072,6 @@ function jumpToHighlightItem(item: ReviewHighlightItem) {
   void readerStore.setCurrentParagraph(item.highlight.paragraphId)
   scrollToParagraph(item.highlight.paragraphId, 'smooth', 'highlight-review')
   pushToast(t('returnedToReadingAnchor', { summary: item.paragraphLabel }), 'info')
-}
-
-function selectWord(word: string) {
-  activeWord.value = activeWord.value === word ? null : word
-}
-
-function playSelectedWord() {
-  if (!activeWord.value) {
-    return
-  }
-
-  if (!('speechSynthesis' in window)) {
-    pushToast(t('pronunciationUnavailable'), 'error')
-    return
-  }
-
-  const utterance = new SpeechSynthesisUtterance(activeWord.value)
-  utterance.lang = 'en-US'
-  window.speechSynthesis.cancel()
-  window.speechSynthesis.speak(utterance)
 }
 
 function applySentenceHighlightColor(color: string) {
@@ -2410,9 +2249,9 @@ watch(
 watch(
   () => selectedSentenceId.value,
   sentenceId => {
-    activeWord.value = null
     if (!sentenceId) {
       showTagEditor.value = false
+      showHighlightColorPanel.value = false
       selectionHighlightRects.value = []
       return
     }
@@ -2426,22 +2265,7 @@ watch(
 )
 
 watch(
-  () => activeWord.value,
-  (word) => {
-    if (!word || !selectedSentenceId.value || !sentenceSelection.value) {
-      return
-    }
-
-    void wordLookupStore.lookup(
-      word,
-      selectedSentenceId.value,
-      sentenceSelection.value.sentence.text
-    )
-  }
-)
-
-watch(
-  () => [sentenceSelection.value?.fragment.id, sentenceCardMode.value, showTagEditor.value, activeWord.value, uiLanguage.value],
+  () => [sentenceSelection.value?.fragment.id, sentenceCardMode.value, showTagEditor.value, showHighlightColorPanel.value, uiLanguage.value],
   () => {
     if (!sentenceSelection.value) {
       return
@@ -2592,15 +2416,16 @@ onBeforeUnmount(() => {
 .book-page.notes-hidden .paragraph { grid-template-columns: 28px minmax(0, 1fr); }
 .paragraph + .paragraph { margin-top: 1.2em; }
 .paragraph.current, .paragraph.highlighted { border-radius: 8px; background: rgba(76, 141, 255, .045); }
-.paragraph.highlighted { background: var(--rf-highlight); }
+.paragraph.highlighted { background: var(--paragraph-highlight-color); }
 .paragraph.current::before, .paragraph.highlighted::before { content: ''; position: absolute; left: 36px; top: .22em; bottom: .22em; width: 2px; border-radius: 999px; }
 .paragraph.current::before { background: var(--rf-primary); }
-.paragraph.highlighted::before { background: var(--rf-highlight-strong); }
+.paragraph.highlighted::before { background: var(--paragraph-highlight-color); }
 .paragraph.current.highlighted::before { background: var(--rf-primary); }
 .paragraph-index { padding-top: .42em; color: var(--rf-text-weak); font-family: "Segoe UI", "PingFang SC", sans-serif; font-size: .72rem; line-height: 1; text-align: right; opacity: 0; transition: opacity .16s ease; user-select: none; }
 .paragraph:hover .paragraph-index, .paragraph.current .paragraph-index, .paragraph.highlighted .paragraph-index { opacity: .68; }
 .paragraph-body { min-width: 0; padding-left: 6px; }
 .paragraph-text, .translation-text { margin: 0; max-width: 100%; font-family: Georgia, "Times New Roman", Times, serif; font-size: 18px; line-height: 1.76; color: #e7e3dc; overflow-wrap: anywhere; word-break: normal; }
+.paragraph.highlighted .paragraph-text { color: #FFFFFF; font-weight: 600; text-shadow: 0 1px 2px rgba(0,0,0,0.45); }
 .paragraph-notes { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
 .paragraph-notes:empty { min-height: 1px; }
 .translation-block { margin-top: .8em; max-width: 100%; }
@@ -2645,12 +2470,18 @@ onBeforeUnmount(() => {
 }
 .sentence-fragment:hover { color: var(--rf-text); }
 .sentence-fragment.marked {
+  color: #FFFFFF;
+  font-weight: 600;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.45);
+  border-radius: 4px;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
   background: linear-gradient(
     180deg,
-    transparent 34%,
-    var(--rf-highlight) 34%,
-    var(--rf-highlight) 88%,
-    transparent 88%
+    transparent 28%,
+    var(--sentence-highlight-color) 28%,
+    var(--sentence-highlight-color) 94%,
+    transparent 94%
   );
 }
 .sentence-fragment.selected {
@@ -2667,7 +2498,7 @@ onBeforeUnmount(() => {
   position: fixed;
   border-radius: 6px;
   background: var(--rf-highlight-strong);
-  box-shadow: inset 0 0 0 1px rgba(214, 184, 90, .28);
+  box-shadow: inset 0 0 0 1px rgba(92, 172, 255, .42);
 }
 .success-text { color: var(--rf-success); }
 .error-text { color: var(--rf-danger); }
@@ -2695,43 +2526,32 @@ onBeforeUnmount(() => {
 .sentence-card {
   position: fixed;
   z-index: 40;
-  width: min(380px, calc(100vw - 24px));
-  max-height: min(70vh, 560px);
+  width: min(360px, calc(100vw - 24px));
+  max-height: min(62vh, 460px);
   overflow: auto;
-  padding: 14px;
+  padding: 12px;
   border: 1px solid var(--rf-border-strong);
-  border-radius: 18px;
+  border-radius: 14px;
   background: var(--rf-surface-raised);
   box-shadow: 0 18px 44px rgba(0, 0, 0, .44);
 }
-.sentence-card-head, .word-card-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
-.sentence-card-title { margin: 4px 0 0; font-size: .98rem; }
+.sentence-card-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.sentence-card-meta { margin: 0; color: var(--rf-text-muted); font-size: .82rem; line-height: 1.45; }
 .sentence-card-close {
   border: none;
   background: transparent;
   color: var(--rf-primary);
-  padding: 4px 0;
+  padding: 0;
 }
-.sentence-card-toggle { margin-top: 10px; }
-.sentence-card-section + .sentence-card-section { margin-top: 12px; }
+.sentence-card-toggle { margin-top: 8px; }
+.sentence-card-section { margin-top: 10px; }
+.sentence-card-section + .sentence-card-section { margin-top: 10px; }
 .sentence-card-label { color: var(--rf-text-muted); font-size: .78rem; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; }
-.sentence-card-text, .sentence-card-meaning { margin: 6px 0 0; line-height: 1.72; overflow-wrap: anywhere; word-break: break-word; }
-.sentence-card-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
-.word-token {
-  border: none;
-  border-radius: 8px;
-  background: transparent;
-  color: inherit;
-  padding: 0 .04em;
-  margin: 0;
-  font: inherit;
-  line-height: inherit;
-}
-.word-token.active {
-  background: var(--rf-selected);
-  color: var(--rf-primary);
-}
-.word-separator { white-space: pre-wrap; }
+.sentence-card-text { margin: 10px 0 0; color: var(--rf-text); font-family: Georgia, "Times New Roman", Times, serif; font-size: .98rem; line-height: 1.62; overflow-wrap: anywhere; word-break: break-word; }
+.sentence-card-translation { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--rf-border); }
+.sentence-card-meaning { margin: 0; color: var(--rf-text-muted); font-size: .9rem; line-height: 1.58; overflow-wrap: anywhere; word-break: break-word; }
+.sentence-card-actions { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin-top: 12px; }
+.sentence-card-actions .chip-button { min-width: 0; padding: 7px 8px; font-size: .8rem; }
 .color-swatches { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
 .color-swatch {
   width: 22px;
@@ -2742,16 +2562,6 @@ onBeforeUnmount(() => {
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .2);
 }
 .color-swatch.active { transform: scale(1.06); box-shadow: 0 0 0 2px var(--rf-primary-border); }
-.word-card {
-  margin-top: 14px;
-  padding: 12px;
-  border-radius: 14px;
-  background: var(--rf-surface-strong);
-  border: 1px solid var(--rf-border-strong);
-}
-.word-card-row { display: grid; grid-template-columns: 88px minmax(0, 1fr); gap: 10px; margin-top: 8px; }
-.word-card-label { color: var(--rf-text-muted); font-size: .82rem; }
-.word-card-value { line-height: 1.55; }
 .vocab-saved { background: rgba(114, 209, 139, .14); color: var(--rf-success); }
 .vocab-entry {
   padding: 10px 12px;
@@ -2836,7 +2646,6 @@ onBeforeUnmount(() => {
     padding: 12px;
     border-radius: 22px;
   }
-  .word-card-row { grid-template-columns: 76px minmax(0, 1fr); }
   .status-bar.mobile { padding: 6px 10px calc(6px + env(safe-area-inset-bottom)); gap: 5px; border-radius: 14px 14px 0 0; }
   .status-summary { font-size: .8rem; }
   .status-bar.mobile .status-chip { padding: 5px 8px; font-size: .76rem; }
